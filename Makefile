@@ -131,19 +131,13 @@ modules/motor/step_motor/step_motor.c \
 modules/motor/servo_motor/servo_motor.c \
 modules/motor/motor_task.c \
 modules/oled/oled.c \
-modules/referee/crc_ref.c \
-modules/referee/rm_referee.c \
-modules/referee/referee_UI.c \
-modules/referee/referee_task.c \
 modules/remote/remote_control.c \
-modules/super_cap/super_cap.c \
 modules/can_comm/can_comm.c \
 modules/message_center/message_center.c \
 modules/daemon/daemon.c \
 modules/alarm/buzzer.c \
 application/gimbal/gimbal.c \
 application/chassis/chassis.c \
-application/shoot/shoot.c \
 application/cmd/robot_cmd.c \
 application/robot.c \
 Core/Src/i2c.c
@@ -223,7 +217,6 @@ C_INCLUDES =  \
 -IDrivers/CMSIS/Device/ST/STM32H7xx/Include \
 -IDrivers/CMSIS/Include \
 -Iapplication/chassis \
--Iapplication/shoot \
 -Iapplication/gimbal \
 -Iapplication/cmd \
 -Iapplication \
@@ -249,9 +242,7 @@ C_INCLUDES =  \
 -Imodules/motor/DMmotor \
 -Imodules/motor \
 -Imodules/oled \
--Imodules/referee \
 -Imodules/remote \
--Imodules/super_cap \
 -Imodules/can_comm \
 -Imodules/message_center \
 -Imodules/daemon \
