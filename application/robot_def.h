@@ -48,8 +48,11 @@
 // 机器人状态
 typedef enum
 {
-    ROBOT_STOP = 0,
-    ROBOT_READY,
+    START_LOCK = 0,
+    FIRST_NORMAL,
+    BULK_SUPPLY,
+    CASUALTY,
+    DANGER,
 } Robot_Status_e;
 
 // 应用状态
@@ -68,20 +71,22 @@ typedef enum
 typedef enum
 {
     CHASSIS_ZERO_FORCE = 0,    // 电流零输入
-    CHASSIS_ROTATE,            // 小陀螺模式
-    CHASSIS_NO_FOLLOW,         // 不跟随，允许全向平移
-    CHASSIS_FOLLOW_GIMBAL_YAW, // 跟随模式，底盘叠加角度环控制
+    CAHSSIS_MOVE,
 } chassis_mode_e;
 
 // 云台模式设置
 typedef enum
 {
-    GIMBAL_ZERO_FORCE = 0, // 电流零输入
-    GIMBAL_FREE_MODE,      // 云台自由运动模式,即与底盘分离(底盘此时应为NO_FOLLOW)反馈值为电机total_angle;似乎可以改为全部用IMU数据?
-    GIMBAL_GYRO_MODE,      // 云台陀螺仪反馈模式,反馈值为陀螺仪pitch,total_yaw_angle,底盘可以为小陀螺和跟随模式
-} gimbal_mode_e;
+    CLAW_ZERO_POS = 0,
+    CLAW_LOCK,
+    CLAW_RELEASE,
+} claw_mode_e;
 
-
+typedef enum
+{
+    CAMERA_ZERO_POS = 0,
+    CAMERA_LOAD,
+} camera_pos_e;
 
 /* ----------------CMD应用发布的控制数据,应当由gimbal/chassis/shoot订阅---------------- */
 /**
@@ -95,22 +100,14 @@ typedef struct
     float vx;           // 前进方向速度
     float vy;           // 横移方向速度
     float wz;           // 旋转速度
-    float offset_angle; // 底盘和归中位置的夹角
     chassis_mode_e chassis_mode;
-    int chassis_speed_buff;
-    // UI部分
-    //  ...
-
 } Chassis_Ctrl_Cmd_s;
 
 // cmd发布的云台控制数据,由gimbal订阅
 typedef struct
-{ // 云台角度控制
-    float yaw;
-    float pitch;
-    float chassis_rotate_wz;
-
-    gimbal_mode_e gimbal_mode;
+{ 
+    claw_mode_e claw_mode;
+    camera_pos_e camera_pos;
 } Gimbal_Ctrl_Cmd_s;
 
 
@@ -122,22 +119,13 @@ typedef struct
 
 typedef struct
 {
-#if defined(CHASSIS_BOARD) || defined(GIMBAL_BOARD) // 非单板的时候底盘还将imu数据回传(若有必要)
-    // attitude_t chassis_imu_data;
-#endif
-    // 后续增加底盘的真实速度
-    // float real_vx;
-    // float real_vy;
-    // float real_wz;
-
-
+// 后续增加里程计等
 } Chassis_Upload_Data_s;
 
 
 typedef struct
 {
-    attitude_t gimbal_imu_data;
-    uint16_t yaw_motor_single_round_angle;
+    uint8_t abc;
 } Gimbal_Upload_Data_s;
 
 #pragma pack() // 开启字节对齐,结束前面的#pragma pack(1)
