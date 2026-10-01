@@ -29,6 +29,7 @@ typedef struct
     ServoType_e servo_type;
     UART_HandleTypeDef *_handle;
     uint8_t servo_id;
+    float initial_angle;
 }Servo_Init_Config_s;
 typedef struct
 {   
@@ -41,5 +42,6 @@ typedef struct
 }ServoInstance;
 
 ServoInstance *ServoInit(Servo_Init_Config_s *Servo_Init_Config);
+// PWM_Servo: angle in degrees (0~180); Bus_Servo: protocol position value.
 void ServoSetAngle(ServoInstance *servo, float angle);
 #endif // SERVO_MOTOR_H

@@ -10,6 +10,18 @@ uint8_t servo_unload[6]={0x55,0x55,0x04,0x14,0x01,0x01};
 static ServoInstance *servo_motor_instance[SERVO_MOTOR_CNT];
 static uint8_t servo_idx = 0; // register servo_idx,是该文件的全局舵机索引,在注册时使用
 static void DecodeServo();
+
+// SG90-style PWM servo: 0~180 degrees maps to 2.5%~12.5% duty cycle.
+static float ServoAngleToDuty(float angle)
+{
+    if (angle < 0.0f)
+        angle = 0.0f;
+    else if (angle > 180.0f)
+        angle = 180.0f;
+
+    return 0.025f + angle / 180.0f * 0.1f;
+}
+
 // 通过此函数注册一个舵机
 ServoInstance *ServoInit(Servo_Init_Config_s *Servo_Init_Config)
 {
@@ -26,8 +38,13 @@ ServoInstance *ServoInit(Servo_Init_Config_s *Servo_Init_Config)
         servo->usart_instance = USARTRegister(&config);
         break;
     case PWM_Servo:
-        servo->pwm_instance = PWMRegister(&Servo_Init_Config->pwm_init_config);
+    {
+        PWM_Init_Config_s pwm_config = Servo_Init_Config->pwm_init_config;
+        servo->angle = Servo_Init_Config->initial_angle;
+        pwm_config.dutyratio = ServoAngleToDuty(Servo_Init_Config->initial_angle);
+        servo->pwm_instance = PWMRegister(&pwm_config);
         break;
+    }
     default:
         LOGERROR("Servo type error");
         break;
@@ -38,7 +55,7 @@ ServoInstance *ServoInit(Servo_Init_Config_s *Servo_Init_Config)
 
     return servo;
 }
-//@todo PWM舵机的角度设置需要根据相应定时器PWM等参数进行计算(是否需要规范定时器PWM的初始化参数，以便于计算)
+// PWM angle mapping assumes a 20 ms period and a 0.5~2.5 ms pulse range.
 void ServoSetAngle(ServoInstance *servo, float angle)
 {
 
@@ -52,7 +69,7 @@ void ServoSetAngle(ServoInstance *servo, float angle)
         break;
     case PWM_Servo:
         servo->angle = angle;
-        PWMSetDutyRatio(servo->pwm_instance, angle);
+        PWMSetDutyRatio(servo->pwm_instance, ServoAngleToDuty(angle));
         break;
     default:
         break;
