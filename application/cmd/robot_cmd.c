@@ -26,8 +26,8 @@ static Chassis_Ctrl_Cmd_s chassis_cmd_send;      // 发送给底盘应用的信�
 static Chassis_Upload_Data_s chassis_fetch_data; // 从底盘应用接收的反馈信息信息,底盘功率枪口热量与底盘运动状态等
 
 static RC_ctrl_t *rc_data;              // 遥控器数据,初始化时返回
-static Vision_Recv_s *vision_recv_data; // 视觉接收数据指针,初始化时返回
-static Vision_Send_s vision_send_data;  // 视觉发送数据
+// 控制结构体
+// 反馈结构体
 
 static Publisher_t *gimbal_cmd_pub;            // 云台控制消息发布者
 static Subscriber_t *gimbal_feed_sub;          // 云台反馈信息订阅者
@@ -36,12 +36,12 @@ static Gimbal_Upload_Data_s gimbal_fetch_data; // 从云台获取的反馈信息
 
 static Robot_Status_e robot_state; // 机器人整体工作状态
 
-BMI088Instance *bmi088_test; // 云台IMU
-BMI088_Data_t bmi088_data;
 void RobotCMDInit()
 {
+#ifdef REMOTE_CONTROL
     rc_data = RemoteControlInit(&huart5);   // 修改为对应串口,注意如果是自研板dbus协议串口需选用添加了反相器的那个
-    vision_recv_data = VisionInit(&huart9); // 视觉通信串口
+#endif
+
 
     gimbal_cmd_pub = PubRegister("gimbal_cmd", sizeof(Gimbal_Ctrl_Cmd_s));
     gimbal_feed_sub = SubRegister("gimbal_feed", sizeof(Gimbal_Upload_Data_s));
@@ -52,7 +52,7 @@ void RobotCMDInit()
 
     robot_state = START_LOCK; // 启动时机器人进入工作模式,后续加入所有应用初始化完成之后再进入
 }
-#ifdef remote_control
+#ifdef REMOTE_CONTROL
 /**
  * @brief 控制输入为遥控器(调试时)的模式和控制量设置
  *
@@ -126,28 +126,20 @@ static void EmergencyHandler()
 /* 机器人核心控制任务,200Hz频率运行(必须高于视觉发送频率) */
 void RobotCMDTask()
 {
-   // BMI088Acquire(bmi088_test,&bmi088_data) ;
-    // 从其他应用获取回传数据
     SubGetMessage(chassis_feed_sub, (void *)&chassis_fetch_data);
-
     SubGetMessage(gimbal_feed_sub, &gimbal_fetch_data);
 
-    // 根据gimbal的反馈值计算云台和底盘正方向的夹角,不需要传参,通过static私有变量完成
-    CalcOffsetAngle();
-    // 根据遥控器左侧开关,确定当前使用的控制模式为遥控器调试还是键鼠
-    if (switch_is_down(rc_data[TEMP].rc.switch_left)) // 遥控器左侧开关状态为[下],遥控器控制
-        RemoteControlSet();
+
+
+
+#ifdef REMOTE_CONTROL
+    RemoteControlSet();
+#endif
 
     EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
 
-    // 设置视觉发送数据,还需增加加速度和角速度数据
-    // VisionSetFlag(chassis_fetch_data.enemy_color,,chassis_fetch_data.bullet_speed)
 
-    // 推送消息,双板通信,视觉通信等
-    // 其他应用所需的控制数据在remotecontrolsetmode和mousekeysetmode中完成设置
 
     PubPushMessage(chassis_cmd_pub, (void *)&chassis_cmd_send);
-
     PubPushMessage(gimbal_cmd_pub, (void *)&gimbal_cmd_send);
-
 }

@@ -20,6 +20,9 @@
 // #define CHASSIS_DRIVE_MECANUM
 #define CHASSIS_DRIVE_DIFFERENTIAL
 
+#define AUTO_CONTROL
+// #define REMOTE_CONTROL
+
 //#define VISION_USE_VCP  // 使用虚拟串口发送视觉数据
 #define VISION_USE_UART // 使用串口发送视觉数据
 
