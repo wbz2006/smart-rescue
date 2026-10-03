@@ -67,7 +67,11 @@ void PWMStop(PWMInstance *pwm)
  */
 void PWMSetPeriod(PWMInstance *pwm, float period)
 {
-    __HAL_TIM_SetAutoreload(pwm->htim, period*((pwm->tclk)/(pwm->htim->Init.Prescaler+1)));
+    uint32_t period_ticks = (uint32_t)(period * ((float)pwm->tclk / (pwm->htim->Init.Prescaler + 1U)));
+
+    if (period_ticks > 0U)
+        period_ticks -= 1U;
+    __HAL_TIM_SetAutoreload(pwm->htim, period_ticks);
 }
 /*
     * @brief 设置pwm占空比
