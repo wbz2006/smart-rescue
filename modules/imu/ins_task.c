@@ -85,7 +85,7 @@ attitude_t *INS_Init(void)
     else
         return (attitude_t *)&INS.Gyro;
 
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+    // HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 
     while (BMI088Init(&hspi2, 1) != BMI088_NO_ERROR)
         ;
@@ -175,7 +175,7 @@ void INS_Task(void)
     if ((count % 2) == 0)
     {
         // 500hz
-        IMU_Temperature_Ctrl();
+        // IMU_Temperature_Ctrl();
     }
 
     if ((count++ % 1000) == 0)
