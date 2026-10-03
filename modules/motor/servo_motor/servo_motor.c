@@ -11,15 +11,15 @@ static ServoInstance *servo_motor_instance[SERVO_MOTOR_CNT];
 static uint8_t servo_idx = 0; // register servo_idx,是该文件的全局舵机索引,在注册时使用
 static void DecodeServo();
 
-// SG90-style PWM servo: 0~180 degrees maps to 2.5%~12.5% duty cycle.
+// PWM position servo: 0~180 degrees maps to 0.5~2.5 ms at a 20 ms period.
 static float ServoAngleToDuty(float angle)
 {
     if (angle < 0.0f)
         angle = 0.0f;
-    else if (angle > 180.0f)
-        angle = 180.0f;
+    else if (angle > SERVO_PWM_MAX_ANGLE)
+        angle = SERVO_PWM_MAX_ANGLE;
 
-    return 0.025f + angle / 180.0f * 0.1f;
+    return 0.025f + angle / SERVO_PWM_MAX_ANGLE * 0.1f;
 }
 
 // 通过此函数注册一个舵机

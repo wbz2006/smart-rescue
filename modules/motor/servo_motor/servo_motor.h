@@ -14,6 +14,7 @@
 #define SERVO_MOVE_CMD 0x03
 #define SERVO_UNLOAD_CMD 0x14
 #define SERVO_POS_READ_CMD 0x15
+#define SERVO_PWM_MAX_ANGLE 180.0f
 typedef enum
 {
     Servo_None_Type = 0,
@@ -42,6 +43,6 @@ typedef struct
 }ServoInstance;
 
 ServoInstance *ServoInit(Servo_Init_Config_s *Servo_Init_Config);
-// PWM_Servo: angle in degrees (0~180); Bus_Servo: protocol position value.
+// PWM_Servo: angle in degrees (0~SERVO_PWM_MAX_ANGLE); Bus_Servo: protocol position value.
 void ServoSetAngle(ServoInstance *servo, float angle);
 #endif // SERVO_MOTOR_H
