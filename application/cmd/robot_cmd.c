@@ -41,7 +41,9 @@ void RobotCMDInit()
 #ifdef REMOTE_CONTROL
     rc_data = RemoteControlInit(&huart5);   // 修改为对应串口,注意如果是自研板dbus协议串口需选用添加了反相器的那个
 #endif
-
+#if defined(VISION_USE_UART) || defined(VISION_USE_VCP)
+    VisionInit(&huart9); // 视觉通信串口
+#endif
 
     gimbal_cmd_pub = PubRegister("gimbal_cmd", sizeof(Gimbal_Ctrl_Cmd_s));
     gimbal_feed_sub = SubRegister("gimbal_feed", sizeof(Gimbal_Upload_Data_s));
@@ -59,41 +61,27 @@ void RobotCMDInit()
  */
 static void RemoteControlSet()
 {
-    // 控制底盘和云台运行模式,云台待添加,云台是否始终使用IMU数据?
-    if (switch_is_down(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[下],底盘跟随云台
+    if (!RemoteControlIsOnline())
     {
-        chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
-        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
-    }
-    else if (switch_is_mid(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[中],底盘和云台分离,底盘保持不转动
-    {
-        chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
-        gimbal_cmd_send.gimbal_mode = GIMBAL_FREE_MODE;
+        chassis_cmd_send.vx = 0.0f;
+        chassis_cmd_send.vy = 0.0f;
+        chassis_cmd_send.wz = 0.0f;
+        chassis_cmd_send.chassis_mode = CHASSIS_ZERO_FORCE;
+        gimbal_cmd_send.claw_mode = CLAW_RELEASE;
+        return;
     }
 
-    // 云台参数,确定云台控制数据
-    if (switch_is_mid(rc_data[TEMP].rc.switch_left)) // 左侧开关状态为[中],视觉模式
-    {
-        // 待添加,视觉会发来和目标的误差,同样将其转化为total angle的增量进行控制
-        // ...
-    }
-    // 左侧开关状态为[下],或视觉未识别到目标,纯遥控器拨杆控制
-    if (switch_is_down(rc_data[TEMP].rc.switch_left) || vision_recv_data->target_state == NO_TARGET)
-    { // 按照摇杆的输出大小进行角度增量,增益系数需调整
-        gimbal_cmd_send.yaw += 0.005f * (float)rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
-    }
-    // 云台软件限位
+    // 当前底盘为差速结构: 右摇杆竖直控制前进,水平控制旋转.
+    chassis_cmd_send.vx = 10.0f * (float)rc_data[TEMP].rc.rocker_r1;
+    chassis_cmd_send.vy = 0.0f;
+    chassis_cmd_send.wz = 10.0f * (float)rc_data[TEMP].rc.rocker_r_;
+    chassis_cmd_send.chassis_mode = CAHSSIS_MOVE;
 
-    // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
-    chassis_cmd_send.vx = 10.0f * (float)rc_data[TEMP].rc.rocker_r_; // _水平方向
-    chassis_cmd_send.vy = 10.0f * (float)rc_data[TEMP].rc.rocker_r1; // 1数值方向
-
-    // 发射参数
-    if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],弹舱打开
-        ;                                            // 弹舱舵机控制,待添加servo_motor模块,开启
+    // 右侧开关向上控制夹爪闭合.
+    if (switch_is_up(rc_data[TEMP].rc.switch_right))
+        gimbal_cmd_send.claw_mode = CLAW_LOCK;
     else
-        ; // 弹舱舵机控制,待添加servo_motor模块,关闭
+        gimbal_cmd_send.claw_mode = CLAW_RELEASE;
 
 }
 #endif
@@ -136,9 +124,7 @@ void RobotCMDTask()
     RemoteControlSet();
 #endif
 
-    EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
-
-
+    // EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
 
     PubPushMessage(chassis_cmd_pub, (void *)&chassis_cmd_send);
     PubPushMessage(gimbal_cmd_pub, (void *)&gimbal_cmd_send);
