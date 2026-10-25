@@ -15,6 +15,7 @@
 #include "robot_def.h"
 #include "dji_motor.h"
 #include "message_center.h"
+#include "serial_print.h"
 
 #include "general_def.h"
 #include "bsp_dwt.h"
@@ -236,6 +237,24 @@ void ChassisTask()
 #endif
 
     ChassisOutput();
+
+#ifdef CHASSIS_DRIVE_DIFFERENTIAL
+    // UART7 @921600, VOFA+ FireWater: 左轮目标/反馈/误差, 右轮目标/反馈/误差, 单位为度/s.
+    // 使用PID实际参考值, 包含电机反转设置; 每20ms输出一次, 避免每轮控制都阻塞发送.
+    static uint32_t last_print_tick;
+    uint32_t now = HAL_GetTick();
+    if ((uint32_t)(now - last_print_tick) >= 20U)
+    {
+        last_print_tick = now;
+        SerialPrintf("%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",
+                     motor_l->motor_controller.speed_PID.Ref,
+                     motor_l->motor_controller.speed_PID.Measure,
+                     motor_l->motor_controller.speed_PID.Err,
+                     motor_r->motor_controller.speed_PID.Ref,
+                     motor_r->motor_controller.speed_PID.Measure,
+                     motor_r->motor_controller.speed_PID.Err);
+    }
+#endif
 
     // 根据电机的反馈速度和IMU(如果有)计算真实速度
     EstimateSpeed();

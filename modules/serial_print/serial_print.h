@@ -1,9 +1,9 @@
 /**
  * @file serial_print.h
- * @brief 基于 BSP USART 层的串口打印模块
+ * @brief 基于 HAL UART 的串口打印模块
  *
  * 使用 UART7 (921600-8-N-1) 提供类似 printf 的串口输出功能。
- * 调用 SerialPrintInit() 注册到 BSP USART 层后，
+ * 在 MX_UART7_Init() 后调用 SerialPrintInit() 创建互斥量，
  * 即可通过 SerialPrintf() / SerialPrint() 在任何 FreeRTOS 任务中打印调试信息。
  * 以 "%.1f,%.1f,...\n" 的 CSV 格式输出可用于 VOFA+ (FireWater) 等上位机绘制波形。
  *
@@ -28,7 +28,7 @@
 #include <stdint.h>
 
 /**
- * @brief 初始化串口打印模块，注册 UART7 到 BSP USART 层
+ * @brief 初始化串口打印模块的互斥量，不启用 DMA 接收
  */
 void SerialPrintInit(void);
 
