@@ -116,6 +116,8 @@ modules/algorithm/QuaternionEKF.c \
 modules/algorithm/crc8.c \
 modules/algorithm/crc16.c \
 modules/algorithm/user_lib.c \
+modules/jscope/jscope.c \
+modules/serial_print/serial_print.c \
 modules/bluetooth/HC05.c \
 modules/BMI088/bmi088.c \
 modules/imu/BMI088driver.c \
@@ -230,6 +232,7 @@ C_INCLUDES =  \
 -Ibsp/pwm \
 -Ibsp \
 -Imodules/algorithm \
+-Imodules/serial_print \
 -Imodules/bluetooth \
 -Imodules/BMI088 \
 -Imodules/imu \

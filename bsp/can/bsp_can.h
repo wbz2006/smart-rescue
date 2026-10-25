@@ -86,6 +86,26 @@ typedef struct
     void *id;                                   // 拥有can实例的模块地址,用于区分不同的模块(如果有需要的话),如果不需要可以不传入
 } CAN_Init_Config_s;
 
+#ifdef FDCAN
+// Live Watch: fdcan_debug[0/1/2]对应CAN1/2/3.入队成功不代表总线发送成功.
+typedef struct
+{
+    uint32_t tx_enqueued;
+    uint32_t tx_failed;
+    uint32_t tx_timeout;
+    uint32_t rx_frames;
+    uint32_t rx_failed;
+    uint32_t last_rx_id;
+    uint32_t bus_off;
+    uint32_t init_mode;
+    uint32_t tx_error_count;
+    uint32_t rx_error_count;
+    uint32_t hal_error;
+} FDCAN_Debug_s;
+
+extern volatile FDCAN_Debug_s fdcan_debug[DEVICE_CAN_CNT];
+#endif
+
 /**
  * @brief Register a module to CAN service,remember to call this before using a CAN device
  *        注册(初始化)一个can实例,需要传入初始化配置的指针.

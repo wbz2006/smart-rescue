@@ -34,15 +34,15 @@ static Chassis_Upload_Data_s chassis_feedback_data; // 底盘回传的反馈数�
 
 #ifdef CHASSIS_DRIVE_MECANUM
     static DJIMotorInstance *motor_lf, *motor_rf, *motor_lb, *motor_rb; // left right forward back
+    static float vt_lf, vt_rf, vt_lb, vt_rb; // 底盘速度解算后的临时输出,待进行限幅
 #endif
 #ifdef CHASSIS_DRIVE_DIFFERENTIAL
     static DJIMotorInstance *motor_l, *motor_r;
+    static float vt_l,vt_r;
 #endif
 
 /* 私有函数计算的中介变量,设为静态避免参数传递的开销 */
 static float chassis_vx, chassis_vy;     // 将云台系的速度投影到底盘
-static float vt_lf, vt_rf, vt_lb, vt_rb; // 底盘速度解算后的临时输出,待进行限幅
-static float vt_l,vt_r;
 
 void ChassisInit()
 {
@@ -122,12 +122,12 @@ void ChassisInit()
         .motor_type = M2006,
     };
 
-    chassis_motor_config.can_init_config.tx_id = 1;
+    chassis_motor_config.can_init_config.tx_id = 3;
     chassis_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_REVERSE;
     motor_l = DJIMotorInit(&chassis_motor_config);
 
-    chassis_motor_config.can_init_config.tx_id = 2;
-    chassis_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_REVERSE;
+    chassis_motor_config.can_init_config.tx_id = 1;
+    chassis_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_NORMAL;
     motor_r = DJIMotorInit(&chassis_motor_config);
 #endif
 
@@ -197,6 +197,8 @@ static void EstimateSpeed()
 void ChassisTask()
 {
     SubGetMessage(chassis_sub, &chassis_cmd_recv);
+    chassis_vx = chassis_cmd_recv.vx;
+    chassis_vy = chassis_cmd_recv.vy;
     
     if (chassis_cmd_recv.chassis_mode == CHASSIS_ZERO_FORCE)
     { // 如果出现重要模块离线或遥控器设置为急停,让电机停止
@@ -232,7 +234,7 @@ void ChassisTask()
 #ifdef CHASSIS_DRIVE_DIFFERENTIAL
     DifferentialCalculate();
 #endif
-    // 根据裁判系统的反馈数据和电容数据对输出限幅并设定闭环参考值
+
     ChassisOutput();
 
     // 根据电机的反馈速度和IMU(如果有)计算真实速度

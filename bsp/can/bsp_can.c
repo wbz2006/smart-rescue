@@ -11,6 +11,27 @@
 static CANInstance *can_instance[CAN_MX_REGISTER_CNT] = {NULL};
 static uint8_t idx; // 全局CAN实例索引,每次有新的模块注册会自增
 
+#ifdef FDCAN
+volatile FDCAN_Debug_s fdcan_debug[DEVICE_CAN_CNT];
+
+static volatile FDCAN_Debug_s *FDCANDebugForBus(FDCAN_HandleTypeDef *hfdcan)
+{
+    return &fdcan_debug[hfdcan == &hfdcan1 ? 0 : (hfdcan == &hfdcan2 ? 1 : 2)];
+}
+
+static void FDCANDebugSnapshot(FDCAN_HandleTypeDef *hfdcan)
+{
+    volatile FDCAN_Debug_s *debug = FDCANDebugForBus(hfdcan);
+    uint32_t psr = hfdcan->Instance->PSR;
+    uint32_t ecr = hfdcan->Instance->ECR;
+    debug->bus_off = (psr & FDCAN_PSR_BO) != 0;
+    debug->init_mode = (hfdcan->Instance->CCCR & FDCAN_CCCR_INIT) != 0;
+    debug->tx_error_count = (ecr & FDCAN_ECR_TEC) >> FDCAN_ECR_TEC_Pos;
+    debug->rx_error_count = (ecr & FDCAN_ECR_REC) >> FDCAN_ECR_REC_Pos;
+    debug->hal_error = hfdcan->ErrorCode;
+}
+#endif
+
 /* ----------------two static function called by CANRegister()-------------------- */
 
 /**
@@ -214,6 +235,8 @@ uint8_t CANTransmit(CANInstance *_instance, float timeout)
     static volatile float wait_time __attribute__((unused)); // for cancel warning
     float dwt_start = DWT_GetTimeline_ms();
 #ifdef FDCAN
+    volatile FDCAN_Debug_s *debug = FDCANDebugForBus(_instance->can_handle);
+    FDCANDebugSnapshot(_instance->can_handle);
     while(HAL_FDCAN_GetTxFifoFreeLevel(_instance->can_handle)==0)
 #else
     while (HAL_CAN_GetTxMailboxesFreeLevel(_instance->can_handle) == 0) // 等待邮箱空闲
@@ -221,6 +244,10 @@ uint8_t CANTransmit(CANInstance *_instance, float timeout)
     {
         if (DWT_GetTimeline_ms() - dwt_start > timeout) // 超时
         {
+#ifdef FDCAN
+            debug->tx_timeout++;
+            FDCANDebugSnapshot(_instance->can_handle);
+#endif
             LOGWARNING("[bsp_can] CAN MAILbox full! failed to add msg to mailbox. Cnt [%d]", busy_count);
             busy_count++;
             return 0;
@@ -235,10 +262,17 @@ uint8_t CANTransmit(CANInstance *_instance, float timeout)
     if (HAL_CAN_AddTxMessage(_instance->can_handle, &_instance->txconf, _instance->tx_buff, &_instance->tx_mailbox))
 #endif
     {
+#ifdef FDCAN
+        debug->tx_failed++;
+        FDCANDebugSnapshot(_instance->can_handle);
+#endif
         LOGWARNING("[bsp_can] CAN bus BUSY! cnt:%d", busy_count);
         busy_count++;
         return 0;
     }
+#ifdef FDCAN
+    debug->tx_enqueued++;
+#endif
     return 1; // 发送成功
 }
 
@@ -267,21 +301,24 @@ void CANSetDLC(CANInstance *_instance, uint8_t length)
  */
 static void FDCANFIFOxCallback(FDCAN_HandleTypeDef *_hfdcan, uint32_t fifox)
 {
-    static FDCAN_RxHeaderTypeDef rxconf; // 同上
-	static uint16_t DataLength = 0;
-    static uint8_t fdcan_rx_buff[8];
+    FDCAN_RxHeaderTypeDef rxconf;
+    // HAL按DLC复制数据,先预留最大帧空间,再拒绝非经典CAN帧.
+    uint8_t fdcan_rx_buff[64];
     while (HAL_FDCAN_GetRxFifoFillLevel(_hfdcan, fifox)) // FIFO不为空,有可能在其他中断时有多帧数据进入
     {
-        HAL_FDCAN_GetRxMessage(_hfdcan, fifox, &rxconf, fdcan_rx_buff); // 从FIFO中获取数据
-		//解析数据长度，@Todo 此处在用新版本重新生成后可能得修改，DataLength可能不需要右移，具体情况具体看	！
-		if(((rxconf.DataLength >> 16) & 0xF)>=0 && ((rxconf.DataLength >> 16) & 0xF)<=8)
-		{
-			DataLength=(rxconf.DataLength >> 16) & 0xF; // 保存接收到的数据长度
-		}
-		else
-		{
-			DataLength=0;
-		}
+        if (HAL_FDCAN_GetRxMessage(_hfdcan, fifox, &rxconf, fdcan_rx_buff) != HAL_OK)
+        {
+            FDCANDebugForBus(_hfdcan)->rx_failed++;
+            break;
+        }
+
+        volatile FDCAN_Debug_s *debug = FDCANDebugForBus(_hfdcan);
+        debug->rx_frames++;
+        debug->last_rx_id = rxconf.Identifier;
+
+        uint32_t DataLength = (rxconf.DataLength >> 16) & 0xF;
+        if (rxconf.FDFormat != FDCAN_CLASSIC_CAN || DataLength > 8)
+            continue;
         if(rxconf.RxFrameType==FDCAN_DATA_FRAME && rxconf.IdType==FDCAN_STANDARD_ID)
         {
         	for (size_t i = 0; i < idx; ++i)
@@ -295,7 +332,7 @@ static void FDCANFIFOxCallback(FDCAN_HandleTypeDef *_hfdcan, uint32_t fifox)
 						memcpy(can_instance[i]->rx_buff, fdcan_rx_buff, can_instance[i]->rx_len); // 消息拷贝到对应实例
 						can_instance[i]->can_module_callback(can_instance[i]);     // 触发回调进行数据解析和处理
 					}
-					return;
+					break; // 只结束实例查找,继续处理FIFO中其余电机的反馈
 				}
 			}
         }
