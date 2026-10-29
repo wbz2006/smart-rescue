@@ -17,7 +17,6 @@
 #include "message_center.h"
 #include "serial_print.h"
 #include "dap_scope.h"
-#include "master_process.h"
 
 #include "general_def.h"
 #include "bsp_dwt.h"
@@ -257,6 +256,8 @@ static void EstimateSpeed()
 
     const float left_speed_mm_s = motor_l->measure.speed_aps * motor_angle_to_wheel_mm;
     const float right_speed_mm_s = -motor_r->measure.speed_aps * motor_angle_to_wheel_mm;
+    chassis_feedback_data.left_wheel_speed_mm_s = left_speed_mm_s;
+    chassis_feedback_data.right_wheel_speed_mm_s = right_speed_mm_s;
     chassis_feedback_data.vx_mm_s = (left_speed_mm_s + right_speed_mm_s) * 0.5f;
     chassis_feedback_data.wz_rad_s = (right_speed_mm_s - left_speed_mm_s) / TRACK_WIDTH;
 #endif
@@ -339,20 +340,4 @@ void ChassisTask()
 
     PubPushMessage(chassis_pub, (void *)&chassis_feedback_data);
 
-#ifdef CHASSIS_DRIVE_DIFFERENTIAL
-    static uint32_t last_upload_tick;
-    static Rescue_Wheel_Upload_s wheel_upload;
-    uint32_t upload_tick = HAL_GetTick();
-    if ((uint32_t)(upload_tick - last_upload_tick) >= 50U)
-    {
-        const float motor_degree_to_wheel_mm = PERIMETER_WHEEL / (360.0f * REDUCTION_RATIO_WHEEL);
-        wheel_upload.timestamp_ms = upload_tick;
-        wheel_upload.left_distance_mm = chassis_feedback_data.left_wheel_distance_mm;
-        wheel_upload.right_distance_mm = chassis_feedback_data.right_wheel_distance_mm;
-        wheel_upload.left_speed_mm_s = motor_l->measure.speed_aps * motor_degree_to_wheel_mm;
-        wheel_upload.right_speed_mm_s = -motor_r->measure.speed_aps * motor_degree_to_wheel_mm;
-        if (RescueSendFrame(RESCUE_CMD_UP_WHEEL, 0U, &wheel_upload, sizeof(wheel_upload)))
-            last_upload_tick = upload_tick;
-    }
-#endif
 }

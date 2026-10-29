@@ -128,6 +128,8 @@ typedef struct
 {
     float left_wheel_distance_mm;  // 左轮累计里程,前进为正
     float right_wheel_distance_mm; // 右轮累计里程,前进为正
+    float left_wheel_speed_mm_s;   // 左轮速度,前进为正
+    float right_wheel_speed_mm_s;  // 右轮速度,前进为正
     float x_mm;                    // 底盘里程计位置,初始朝向为X正方向
     float y_mm;                    // 底盘里程计位置,Y正方向为底盘右侧
     float yaw_rad;                 // 底盘累计航向角,逆时针为正

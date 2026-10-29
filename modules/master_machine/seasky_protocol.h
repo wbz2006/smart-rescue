@@ -14,9 +14,7 @@
 
 typedef enum
 {
-    RESCUE_CMD_UP_IMU = 0x0101,
-    RESCUE_CMD_UP_WHEEL = 0x0102,
-    RESCUE_CMD_UP_STATUS = 0x0103,
+    RESCUE_CMD_UP_TELEMETRY = 0x0101,
     RESCUE_CMD_DOWN_CONTROL = 0x0201,
 } Rescue_Command_e;
 

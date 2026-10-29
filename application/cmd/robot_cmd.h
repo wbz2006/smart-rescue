@@ -9,7 +9,7 @@
 void RobotCMDInit();
 
 /**
- * @brief 机器人核心控制任务,200Hz频率运行(必须高于视觉发送频率)
+ * @brief 机器人核心控制任务,200Hz运行;上下位机通信按100Hz更新
  * 
  */
 void RobotCMDTask();

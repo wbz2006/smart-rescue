@@ -12,6 +12,7 @@
 // bsp
 #include "bsp_dwt.h"
 #include "bsp_log.h"
+#include <string.h>
 
 // 私有宏,自动将编码器转换成角度值
 #define YAW_ALIGN_ANGLE (YAW_CHASSIS_ALIGN_ECD * ECD_ANGLE_COEF_DJI) // 对齐时的角度,0-360
@@ -26,6 +27,7 @@ static Chassis_Ctrl_Cmd_s chassis_cmd_send;      // 发送给底盘应用的信�
 static Chassis_Upload_Data_s chassis_fetch_data; // 从底盘应用接收的反馈信息信息,底盘功率枪口热量与底盘运动状态等
 
 static RC_ctrl_t *rc_data;              // 遥控器数据,初始化时返回
+static attitude_t *imu_data;
 // 控制结构体
 // 反馈结构体
 
@@ -38,6 +40,7 @@ static Robot_Status_e robot_state; // 机器人整体工作状态
 
 void RobotCMDInit()
 {
+    imu_data = INS_GetData();
 #ifdef REMOTE_CONTROL
     rc_data = RemoteControlInit(&huart5);   // 修改为对应串口,注意如果是自研板dbus协议串口需选用添加了反相器的那个
 #endif
@@ -166,7 +169,7 @@ static void EmergencyHandler()
     // }
 }
 
-/* 机器人核心控制任务,200Hz频率运行(必须高于视觉发送频率) */
+/* 机器人核心控制任务,200Hz运行;上下位机通信按100Hz更新 */
 void RobotCMDTask()
 {
     SubGetMessage(chassis_feed_sub, (void *)&chassis_fetch_data);
@@ -180,22 +183,36 @@ void RobotCMDTask()
     RemoteControlSet();
 #endif
 
-    static uint32_t last_status_upload_tick;
-    static Rescue_Status_Upload_s status_upload;
+    static uint32_t last_telemetry_tick;
+    static Rescue_Telemetry_s telemetry;
     uint32_t now = HAL_GetTick();
-    if ((uint32_t)(now - last_status_upload_tick) >= 100U)
+    if ((uint32_t)(now - last_telemetry_tick) >= RESCUE_PERIOD_MS)
     {
-        status_upload.timestamp_ms = now;
-        status_upload.robot_state = (uint8_t)robot_state;
-        status_upload.chassis_mode = (uint8_t)chassis_cmd_send.chassis_mode;
-        status_upload.online_flags = (uint8_t)(RescueControlIsOnline() ? 0x01U : 0U);
+        telemetry.timestamp_ms = now;
+        memcpy(telemetry.accel, imu_data->Accel, sizeof(telemetry.accel));
+        memcpy(telemetry.gyro, imu_data->Gyro, sizeof(telemetry.gyro));
+        telemetry.roll = imu_data->Roll;
+        telemetry.pitch = imu_data->Pitch;
+        telemetry.yaw = imu_data->Yaw;
+        telemetry.left_wheel_distance_mm = chassis_fetch_data.left_wheel_distance_mm;
+        telemetry.right_wheel_distance_mm = chassis_fetch_data.right_wheel_distance_mm;
+        telemetry.left_wheel_speed_mm_s = chassis_fetch_data.left_wheel_speed_mm_s;
+        telemetry.right_wheel_speed_mm_s = chassis_fetch_data.right_wheel_speed_mm_s;
+        telemetry.x_mm = chassis_fetch_data.x_mm;
+        telemetry.y_mm = chassis_fetch_data.y_mm;
+        telemetry.yaw_rad = chassis_fetch_data.yaw_rad;
+        telemetry.vx_mm_s = chassis_fetch_data.vx_mm_s;
+        telemetry.wz_rad_s = chassis_fetch_data.wz_rad_s;
+        telemetry.robot_state = (uint8_t)robot_state;
+        telemetry.chassis_mode = (uint8_t)chassis_cmd_send.chassis_mode;
+        telemetry.online_flags = (uint8_t)(RescueControlIsOnline() ? 0x01U : 0U);
 #ifdef REMOTE_CONTROL
         if (RemoteControlIsOnline())
-            status_upload.online_flags |= 0x02U;
+            telemetry.online_flags |= 0x02U;
 #endif
-        status_upload.reserved = 0U;
-        if (RescueSendFrame(RESCUE_CMD_UP_STATUS, 0U, &status_upload, sizeof(status_upload)))
-            last_status_upload_tick = now;
+        telemetry.reserved = 0U;
+        if (RescueSendFrame(RESCUE_CMD_UP_TELEMETRY, 0U, &telemetry, sizeof(telemetry)))
+            last_telemetry_tick = now;
     }
 
     // EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况

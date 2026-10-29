@@ -63,14 +63,6 @@ static void VisionOfflineCallback(void *id)
 static uint8_t rescue_rx_accum[RESCUE_RX_ACCUM_SIZE];
 static uint16_t rescue_rx_accum_len;
 
-static uint8_t IsRescueCommand(uint16_t cmd_id)
-{
-    return (uint8_t)(cmd_id == RESCUE_CMD_UP_IMU ||
-                     cmd_id == RESCUE_CMD_UP_WHEEL ||
-                     cmd_id == RESCUE_CMD_UP_STATUS ||
-                     cmd_id == RESCUE_CMD_DOWN_CONTROL);
-}
-
 static void DecodeRescueControl(const Rescue_Frame_s *frame)
 {
     Rescue_Control_s candidate;
@@ -103,52 +95,29 @@ static void DecodeRescueBuffer(void)
 
         uint16_t cmd_id = (uint16_t)rescue_rx_accum[offset + 4U] |
                           ((uint16_t)rescue_rx_accum[offset + 5U] << 8);
-        uint16_t frame_len;
-        if (IsRescueCommand(cmd_id))
+        if (cmd_id != RESCUE_CMD_DOWN_CONTROL)
         {
-            frame_len = RescueProtocolFrameLength(rescue_rx_accum + offset);
-            if (frame_len == 0U)
-            {
-                ++offset;
-                continue;
-            }
-            if (rescue_rx_accum_len - offset < frame_len)
-                break;
-
-            Rescue_Frame_s frame;
-            if (RescueProtocolUnpack(rescue_rx_accum + offset, frame_len, &frame))
-            {
-                DecodeRescueControl(&frame);
-                DaemonReload(vision_daemon_instance);
-                offset = (uint16_t)(offset + frame_len);
-                continue;
-            }
-        }
-        else
-        {
-            uint16_t data_len = (uint16_t)rescue_rx_accum[offset + 1U] |
-                                ((uint16_t)rescue_rx_accum[offset + 2U] << 8);
-            if (data_len < 2U || data_len > VISION_RECV_SIZE - OFFSET_BYTE)
-            {
-                ++offset;
-                continue;
-            }
-
-            frame_len = (uint16_t)(OFFSET_BYTE + data_len);
-            if (rescue_rx_accum_len - offset < frame_len)
-                break;
-
-            uint16_t flags_register;
-            if (frame_len == VISION_RECV_SIZE &&
-                get_protocol_info(rescue_rx_accum + offset, &flags_register,
-                                  (uint8_t *)&recv_data.pitch) != 0U)
-            {
-                DaemonReload(vision_daemon_instance);
-                offset = (uint16_t)(offset + frame_len);
-                continue;
-            }
+            ++offset;
+            continue;
         }
 
+        uint16_t frame_len = RescueProtocolFrameLength(rescue_rx_accum + offset);
+        if (frame_len == 0U)
+        {
+            ++offset;
+            continue;
+        }
+        if (rescue_rx_accum_len - offset < frame_len)
+            break;
+
+        Rescue_Frame_s frame;
+        if (RescueProtocolUnpack(rescue_rx_accum + offset, frame_len, &frame))
+        {
+            DecodeRescueControl(&frame);
+            DaemonReload(vision_daemon_instance);
+            offset = (uint16_t)(offset + frame_len);
+            continue;
+        }
         ++offset;
     }
 

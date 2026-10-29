@@ -8,6 +8,7 @@
 #define VISION_SEND_SIZE 36u
 #define RESCUE_RECV_SIZE 160u
 #define RESCUE_SEND_SIZE 160u
+#define RESCUE_PERIOD_MS 10U
 
 #pragma pack(1)
 typedef enum
@@ -90,25 +91,20 @@ typedef struct
     float roll;
     float pitch;
     float yaw;
-} Rescue_Imu_Upload_s;
-
-typedef struct
-{
-    uint32_t timestamp_ms;
-    float left_distance_mm;
-    float right_distance_mm;
-    float left_speed_mm_s;
-    float right_speed_mm_s;
-} Rescue_Wheel_Upload_s;
-
-typedef struct
-{
-    uint32_t timestamp_ms;
+    float left_wheel_distance_mm;
+    float right_wheel_distance_mm;
+    float left_wheel_speed_mm_s;
+    float right_wheel_speed_mm_s;
+    float x_mm;
+    float y_mm;
+    float yaw_rad;
+    float vx_mm_s;
+    float wz_rad_s;
     uint8_t robot_state;
     uint8_t chassis_mode;
     uint8_t online_flags;
     uint8_t reserved;
-} Rescue_Status_Upload_s;
+} Rescue_Telemetry_s;
 
 typedef struct
 {
@@ -120,6 +116,10 @@ typedef struct
     uint8_t camera_pos;
 } Rescue_Control_s;
 #pragma pack()
+
+_Static_assert(sizeof(float) == 4U, "rescue protocol requires binary32 floats");
+_Static_assert(sizeof(Rescue_Telemetry_s) == 80U, "update telemetry wire format");
+_Static_assert(sizeof(Rescue_Control_s) == 15U, "update control wire format");
 
 /**
  * @brief 调用此函数初始化和视觉的串口通信
