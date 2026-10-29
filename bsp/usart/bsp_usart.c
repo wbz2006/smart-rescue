@@ -82,10 +82,7 @@ void USARTSend(USARTInstance *_instance, uint8_t *send_buf, uint16_t send_size, 
 /* 串口发送时,gstate会被设为BUSY_TX */
 uint8_t USARTIsReady(USARTInstance *_instance)
 {
-    if (_instance->usart_handle->gState | HAL_UART_STATE_BUSY_TX)
-        return 0;
-    else
-        return 1;
+    return (uint8_t)(_instance->usart_handle->gState == HAL_UART_STATE_READY);
 }
 
 /**
@@ -105,6 +102,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     { // find the instance which is being handled
         if (huart == usart_instance[i]->usart_handle)
         { // call the callback function if it is not NULL
+            usart_instance[i]->recv_len = Size;
             if (usart_instance[i]->module_callback != NULL)
             {
                 usart_instance[i]->module_callback();

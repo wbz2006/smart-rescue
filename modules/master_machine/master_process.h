@@ -6,6 +6,8 @@
 
 #define VISION_RECV_SIZE 18u // 当前为固定值,36字节
 #define VISION_SEND_SIZE 36u
+#define RESCUE_RECV_SIZE 160u
+#define RESCUE_SEND_SIZE 160u
 
 #pragma pack(1)
 typedef enum
@@ -79,6 +81,44 @@ typedef struct
 	float pitch;
 	float roll;
 } Vision_Send_s;
+
+typedef struct
+{
+    uint32_t timestamp_ms;
+    float accel[3];
+    float gyro[3];
+    float roll;
+    float pitch;
+    float yaw;
+} Rescue_Imu_Upload_s;
+
+typedef struct
+{
+    uint32_t timestamp_ms;
+    float left_distance_mm;
+    float right_distance_mm;
+    float left_speed_mm_s;
+    float right_speed_mm_s;
+} Rescue_Wheel_Upload_s;
+
+typedef struct
+{
+    uint32_t timestamp_ms;
+    uint8_t robot_state;
+    uint8_t chassis_mode;
+    uint8_t online_flags;
+    uint8_t reserved;
+} Rescue_Status_Upload_s;
+
+typedef struct
+{
+    float vx_mm_s;
+    float vy_mm_s;
+    float wz_rad_s;
+    uint8_t chassis_mode;
+    uint8_t claw_mode;
+    uint8_t camera_pos;
+} Rescue_Control_s;
 #pragma pack()
 
 /**
@@ -110,5 +150,9 @@ void VisionSetFlag(Enemy_Color_e enemy_color, Work_Mode_e work_mode, Bullet_Spee
  * @param pitch
  */
 void VisionSetAltitude(float yaw, float pitch, float roll);
+
+uint8_t RescueSendFrame(uint16_t cmd_id, uint8_t flags, const void *payload, uint16_t payload_len);
+uint8_t RescueGetControl(Rescue_Control_s *control);
+uint8_t RescueControlIsOnline(void);
 
 #endif // !MASTER_PROCESS_H

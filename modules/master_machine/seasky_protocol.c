@@ -131,3 +131,74 @@ uint16_t get_protocol_info(uint8_t *rx_buf,          // 接收到的原始数据
     }
     return 0;
 }
+
+uint16_t RescueProtocolPack(uint16_t cmd_id, uint8_t seq, uint8_t flags,
+                            const void *payload, uint16_t payload_len,
+                            uint8_t *tx_buf, uint16_t tx_capacity)
+{
+    uint16_t frame_len;
+    uint16_t crc16;
+
+    if (tx_buf == NULL || (payload_len != 0U && payload == NULL) ||
+        payload_len > RESCUE_PROTOCOL_MAX_PAYLOAD)
+        return 0U;
+    frame_len = (uint16_t)(OFFSET_BYTE + payload_len + 2U);
+    if (tx_capacity < frame_len)
+        return 0U;
+
+    tx_buf[0] = PROTOCOL_CMD_ID;
+    tx_buf[1] = (uint8_t)((payload_len + 2U) & 0xffU);
+    tx_buf[2] = (uint8_t)((payload_len + 2U) >> 8);
+    tx_buf[3] = crc_8(tx_buf, 3U);
+    tx_buf[4] = (uint8_t)cmd_id;
+    tx_buf[5] = (uint8_t)(cmd_id >> 8);
+    tx_buf[6] = seq;
+    tx_buf[7] = flags;
+    if (payload_len != 0U)
+        memcpy(tx_buf + RESCUE_PROTOCOL_HEADER_SIZE, payload, payload_len);
+
+    crc16 = crc_16(tx_buf, (uint16_t)(RESCUE_PROTOCOL_HEADER_SIZE + payload_len));
+    tx_buf[RESCUE_PROTOCOL_HEADER_SIZE + payload_len] = (uint8_t)crc16;
+    tx_buf[RESCUE_PROTOCOL_HEADER_SIZE + payload_len + 1U] = (uint8_t)(crc16 >> 8);
+    return frame_len;
+}
+
+uint16_t RescueProtocolFrameLength(const uint8_t *rx_buf)
+{
+    uint16_t payload_len;
+
+    if (rx_buf == NULL || rx_buf[0] != PROTOCOL_CMD_ID)
+        return 0U;
+    payload_len = (uint16_t)rx_buf[1] | ((uint16_t)rx_buf[2] << 8);
+    if (payload_len < 2U || payload_len > RESCUE_PROTOCOL_MAX_PAYLOAD + 2U)
+        return 0U;
+    return (uint16_t)(OFFSET_BYTE + payload_len);
+}
+
+uint8_t RescueProtocolUnpack(const uint8_t *rx_buf, uint16_t rx_len,
+                             Rescue_Frame_s *frame)
+{
+    uint16_t frame_len;
+    uint16_t expected_crc;
+    uint16_t received_crc;
+
+    if (rx_buf == NULL || frame == NULL)
+        return 0U;
+    frame_len = RescueProtocolFrameLength(rx_buf);
+    if (frame_len == 0U || rx_len < frame_len || crc_8(rx_buf, 3U) != rx_buf[3])
+        return 0U;
+
+    expected_crc = crc_16(rx_buf, (uint16_t)(frame_len - RESCUE_PROTOCOL_TAIL_SIZE));
+    received_crc = (uint16_t)rx_buf[frame_len - 2U] |
+                   ((uint16_t)rx_buf[frame_len - 1U] << 8);
+    if (expected_crc != received_crc)
+        return 0U;
+
+    frame->cmd_id = (uint16_t)rx_buf[4] | ((uint16_t)rx_buf[5] << 8);
+    frame->seq = rx_buf[6];
+    frame->flags = rx_buf[7];
+    frame->payload = rx_buf + RESCUE_PROTOCOL_HEADER_SIZE;
+    frame->payload_len = (uint16_t)((uint16_t)rx_buf[1] |
+                                    ((uint16_t)rx_buf[2] << 8)) - 2U;
+    return 1U;
+}
