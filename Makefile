@@ -117,6 +117,7 @@ modules/algorithm/crc8.c \
 modules/algorithm/crc16.c \
 modules/algorithm/user_lib.c \
 modules/jscope/jscope.c \
+modules/dap_scope/dap_scope.c \
 modules/serial_print/serial_print.c \
 modules/bluetooth/HC05.c \
 modules/BMI088/bmi088.c \
@@ -250,6 +251,7 @@ C_INCLUDES =  \
 -Imodules/message_center \
 -Imodules/daemon \
 -Imodules/alarm \
+-Imodules/dap_scope \
 -Imodules \
 -IMiddlewares/ST/ARM/DSP/Inc \
 -IMiddlewares/ST/ARM/DSP/Include/dsp \

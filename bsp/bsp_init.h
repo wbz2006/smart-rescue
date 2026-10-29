@@ -16,7 +16,7 @@
 // 
 void BSPInit()
 {
-    DWT_Init(480);
+    DWT_Init(SystemCoreClock / 1000000U);
     BSPLogInit();
     SerialPrintInit();
 }

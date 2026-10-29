@@ -254,6 +254,18 @@ app、module和bsp都有相应的rtos任务。其中bsp为创建任务提供了�
 
 
 
+#### STM32H723 DAPLink 波形采集
+
+工程已集成 `modules/dap_scope`，通过 RTT 通道 1 输出底盘左右轮速度 PID 的目标值和反馈值；通道 0 保留给 RTT 日志。DAPScope 时间戳从 `SystemCoreClock` 配置的 DWT 计数器读取，适配当前 H723 的 240 MHz 核心时钟。
+
+编译并运行固件后，在上位机项目 `daplink-jscope/host` 中运行：
+
+```powershell
+python -m daplink_jscope -t stm32h723xx --clock 1000000 --search-range 0x24000000,0x20000
+```
+
+范围对应本工程链接脚本中的 D1 SRAM（`.bss` 所在区）。如需关闭底盘采样，可在构建参数中定义 `CHASSIS_SCOPE_ENABLE=0`。
+
 ## 如何使用本框架
 
 仓库中有各种各样的说明文档和使用帮助。

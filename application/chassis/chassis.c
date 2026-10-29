@@ -16,6 +16,8 @@
 #include "dji_motor.h"
 #include "message_center.h"
 #include "serial_print.h"
+#include "dap_scope.h"
+#include "master_process.h"
 
 #include "general_def.h"
 #include "bsp_dwt.h"
@@ -44,6 +46,10 @@ static Chassis_Upload_Data_s chassis_feedback_data; // 底盘回传的反馈数�
 
 /* 私有函数计算的中介变量,设为静态避免参数传递的开销 */
 static float chassis_vx, chassis_vy;     // 将云台系的速度投影到底盘
+
+#ifndef CHASSIS_SCOPE_ENABLE
+#define CHASSIS_SCOPE_ENABLE 1
+#endif
 
 void ChassisInit()
 {
@@ -254,6 +260,14 @@ void ChassisTask()
                      motor_r->motor_controller.speed_PID.Measure,
                      motor_r->motor_controller.speed_PID.Err);
     }
+
+#if CHASSIS_SCOPE_ENABLE
+    const float left_ref = motor_l->motor_controller.speed_PID.Ref;
+    const float left_measure = motor_l->motor_controller.speed_PID.Measure;
+    const float right_ref = motor_r->motor_controller.speed_PID.Ref;
+    const float right_measure = motor_r->motor_controller.speed_PID.Measure;
+    SCOPE_PLOT(left_ref, left_measure, right_ref, right_measure);
+#endif
 #endif
 
     // 根据电机的反馈速度和IMU(如果有)计算真实速度
