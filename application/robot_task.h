@@ -15,6 +15,7 @@
 #include "buzzer.h"
 
 #include "bsp_log.h"
+#include <string.h>
 
 osThreadId insTaskHandle;
 osThreadId robotTaskHandle;
@@ -52,7 +53,9 @@ __attribute__((noreturn)) void StartINSTASK(void const *argument)
 {
     static float ins_start;
     static float ins_dt;
-    INS_Init(); // 确保BMI088被正确初始化.
+    static uint32_t last_upload_tick;
+    static Rescue_Imu_Upload_s imu_upload;
+    attitude_t *imu_data = INS_Init(); // 确保BMI088被正确初始化.
     LOGINFO("[freeRTOS] INS Task Start");
     for (;;)
     {
@@ -62,7 +65,18 @@ __attribute__((noreturn)) void StartINSTASK(void const *argument)
         ins_dt = DWT_GetTimeline_ms() - ins_start;
         if (ins_dt > 1)
             LOGERROR("[freeRTOS] INS Task is being DELAY! dt = [%f]", &ins_dt);
-        VisionSend(); // 解算完成后发送视觉数据,但是当前的实现不太优雅,后续若添加硬件触发需要重新考虑结构的组织
+        uint32_t now = HAL_GetTick();
+        if ((uint32_t)(now - last_upload_tick) >= 10U)
+        {
+            imu_upload.timestamp_ms = now;
+            memcpy(imu_upload.accel, imu_data->Accel, sizeof(imu_upload.accel));
+            memcpy(imu_upload.gyro, imu_data->Gyro, sizeof(imu_upload.gyro));
+            imu_upload.roll = imu_data->Roll;
+            imu_upload.pitch = imu_data->Pitch;
+            imu_upload.yaw = imu_data->Yaw;
+            if (RescueSendFrame(RESCUE_CMD_UP_IMU, 0U, &imu_upload, sizeof(imu_upload)))
+                last_upload_tick = now;
+        }
         osDelay(1);
     }
 }

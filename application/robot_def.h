@@ -21,8 +21,10 @@
 #define CHASSIS_DRIVE_DIFFERENTIAL
 
 // Select the command source. Keep only one input mode enabled for a build.
-// #define AUTO_CONTROL
-#define REMOTE_CONTROL
+#define AUTO_CONTROL
+// #define REMOTE_CONTROL
+// One-shot, low-speed wheel PID bench test; keep disabled for normal operation.
+// #define WHEEL_PID_TEST_MODE
 
 //#define VISION_USE_VCP  // 使用虚拟串口发送视觉数据
 #define VISION_USE_UART // 使用串口发送视觉数据
@@ -105,6 +107,7 @@ typedef struct
     float vy;           // 横移方向速度
     float wz;           // 旋转速度
     chassis_mode_e chassis_mode;
+    uint8_t metric_mode; // 1: vx/vy为mm/s且wz为rad/s
 } Chassis_Ctrl_Cmd_s;
 
 // cmd发布的云台控制数据,由gimbal订阅
@@ -123,7 +126,13 @@ typedef struct
 
 typedef struct
 {
-// 后续增加里程计等
+    float left_wheel_distance_mm;  // 左轮累计里程,前进为正
+    float right_wheel_distance_mm; // 右轮累计里程,前进为正
+    float x_mm;                    // 底盘里程计位置,初始朝向为X正方向
+    float y_mm;                    // 底盘里程计位置,Y正方向为底盘右侧
+    float yaw_rad;                 // 底盘累计航向角,逆时针为正
+    float vx_mm_s;                 // 底盘前向速度
+    float wz_rad_s;                // 底盘角速度,逆时针为正
 } Chassis_Upload_Data_s;
 
 

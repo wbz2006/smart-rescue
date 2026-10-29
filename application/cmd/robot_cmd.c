@@ -42,7 +42,7 @@ void RobotCMDInit()
     rc_data = RemoteControlInit(&huart5);   // 修改为对应串口,注意如果是自研板dbus协议串口需选用添加了反相器的那个
 #endif
 #if defined(VISION_USE_UART) || defined(VISION_USE_VCP)
-    VisionInit(&huart9); // 视觉通信串口
+    VisionInit(&huart10); // 上位机通信串口
 #endif
 
     gimbal_cmd_pub = PubRegister("gimbal_cmd", sizeof(Gimbal_Ctrl_Cmd_s));
@@ -87,6 +87,60 @@ static void RemoteControlSet()
 }
 #endif
 
+#ifdef WHEEL_PID_TEST_MODE
+static void WheelPIDTestSet()
+{
+    static uint32_t start_tick;
+    uint32_t now = HAL_GetTick();
+
+    if (start_tick == 0U)
+        start_tick = now;
+
+    uint32_t elapsed = now - start_tick;
+    chassis_cmd_send.vy = 0.0f;
+    chassis_cmd_send.wz = 0.0f;
+    gimbal_cmd_send.claw_mode = CLAW_RELEASE;
+
+    if (elapsed >= 3000U && elapsed < 4000U)
+    {
+        chassis_cmd_send.vx = -500.0f;
+        chassis_cmd_send.chassis_mode = CAHSSIS_MOVE;
+    }
+    else
+    {
+        chassis_cmd_send.vx = 0.0f;
+        chassis_cmd_send.chassis_mode = CHASSIS_ZERO_FORCE;
+    }
+}
+#endif
+
+#ifdef AUTO_CONTROL
+static void AutoControlSet()
+{
+    Rescue_Control_s host_control;
+
+    if (!RescueControlIsOnline() || !RescueGetControl(&host_control))
+    {
+        chassis_cmd_send.vx = 0.0f;
+        chassis_cmd_send.vy = 0.0f;
+        chassis_cmd_send.wz = 0.0f;
+        chassis_cmd_send.chassis_mode = CHASSIS_ZERO_FORCE;
+        chassis_cmd_send.metric_mode = 1U;
+        robot_state = START_LOCK;
+        return;
+    }
+
+    chassis_cmd_send.vx = host_control.vx_mm_s;
+    chassis_cmd_send.vy = host_control.vy_mm_s;
+    chassis_cmd_send.wz = host_control.wz_rad_s;
+    chassis_cmd_send.chassis_mode = (chassis_mode_e)host_control.chassis_mode;
+    chassis_cmd_send.metric_mode = 1U;
+    gimbal_cmd_send.claw_mode = (claw_mode_e)host_control.claw_mode;
+    gimbal_cmd_send.camera_pos = (camera_pos_e)host_control.camera_pos;
+    robot_state = FIRST_NORMAL;
+}
+#endif
+
 /**
  * @brief  紧急停止,包括遥控器左上侧拨轮打满/重要模块离线/双板通信失效等
  *         停止的阈值'300'待修改成合适的值,或改为开关控制.
@@ -118,12 +172,31 @@ void RobotCMDTask()
     SubGetMessage(chassis_feed_sub, (void *)&chassis_fetch_data);
     SubGetMessage(gimbal_feed_sub, &gimbal_fetch_data);
 
-
-
-
-#ifdef REMOTE_CONTROL
+#ifdef WHEEL_PID_TEST_MODE
+    WheelPIDTestSet();
+#elif defined(AUTO_CONTROL)
+    AutoControlSet();
+#elif defined(REMOTE_CONTROL)
     RemoteControlSet();
 #endif
+
+    static uint32_t last_status_upload_tick;
+    static Rescue_Status_Upload_s status_upload;
+    uint32_t now = HAL_GetTick();
+    if ((uint32_t)(now - last_status_upload_tick) >= 100U)
+    {
+        status_upload.timestamp_ms = now;
+        status_upload.robot_state = (uint8_t)robot_state;
+        status_upload.chassis_mode = (uint8_t)chassis_cmd_send.chassis_mode;
+        status_upload.online_flags = (uint8_t)(RescueControlIsOnline() ? 0x01U : 0U);
+#ifdef REMOTE_CONTROL
+        if (RemoteControlIsOnline())
+            status_upload.online_flags |= 0x02U;
+#endif
+        status_upload.reserved = 0U;
+        if (RescueSendFrame(RESCUE_CMD_UP_STATUS, 0U, &status_upload, sizeof(status_upload)))
+            last_status_upload_tick = now;
+    }
 
     // EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
 

@@ -27,6 +27,7 @@
 #define HALF_WHEEL_BASE (WHEEL_BASE / 2.0f)     // 半轴距
 #define HALF_TRACK_WIDTH (TRACK_WIDTH / 2.0f)   // 半轮距
 #define PERIMETER_WHEEL (RADIUS_WHEEL * 2 * PI) // 轮子周长
+#define MOTOR_DEGREE_PER_MM (REDUCTION_RATIO_WHEEL * 360.0f / PERIMETER_WHEEL)
 
 
 static Publisher_t *chassis_pub;                    // 用于发布底盘的数据
@@ -42,6 +43,8 @@ static Chassis_Upload_Data_s chassis_feedback_data; // 底盘回传的反馈数�
 #ifdef CHASSIS_DRIVE_DIFFERENTIAL
     static DJIMotorInstance *motor_l, *motor_r;
     static float vt_l,vt_r;
+    static uint16_t last_left_ecd, last_right_ecd;
+    static uint8_t odometry_ecd_initialized;
 #endif
 
 /* 私有函数计算的中介变量,设为静态避免参数传递的开销 */
@@ -153,10 +156,20 @@ void ChassisInit()
  */
 static void MecanumCalculate()
 {
-    vt_lf = -chassis_vx - chassis_vy - chassis_cmd_recv.wz * LF_CENTER;
-    vt_rf = -chassis_vx + chassis_vy - chassis_cmd_recv.wz * RF_CENTER;
-    vt_lb = chassis_vx - chassis_vy - chassis_cmd_recv.wz * LB_CENTER;
-    vt_rb = chassis_vx + chassis_vy - chassis_cmd_recv.wz * RB_CENTER;
+    if (chassis_cmd_recv.metric_mode)
+    {
+        vt_lf = (-chassis_vx - chassis_vy - chassis_cmd_recv.wz * LF_CENTER * RAD_2_DEGREE) * MOTOR_DEGREE_PER_MM;
+        vt_rf = (-chassis_vx + chassis_vy - chassis_cmd_recv.wz * RF_CENTER * RAD_2_DEGREE) * MOTOR_DEGREE_PER_MM;
+        vt_lb = (chassis_vx - chassis_vy - chassis_cmd_recv.wz * LB_CENTER * RAD_2_DEGREE) * MOTOR_DEGREE_PER_MM;
+        vt_rb = (chassis_vx + chassis_vy - chassis_cmd_recv.wz * RB_CENTER * RAD_2_DEGREE) * MOTOR_DEGREE_PER_MM;
+    }
+    else
+    {
+        vt_lf = -chassis_vx - chassis_vy - chassis_cmd_recv.wz * LF_CENTER;
+        vt_rf = -chassis_vx + chassis_vy - chassis_cmd_recv.wz * RF_CENTER;
+        vt_lb = chassis_vx - chassis_vy - chassis_cmd_recv.wz * LB_CENTER;
+        vt_rb = chassis_vx + chassis_vy - chassis_cmd_recv.wz * RB_CENTER;
+    }
 }
 #endif
 #ifdef CHASSIS_DRIVE_DIFFERENTIAL
@@ -166,8 +179,16 @@ static void MecanumCalculate()
  */
 static void DifferentialCalculate()
 {
-    vt_l = -chassis_vx - chassis_cmd_recv.wz * HALF_TRACK_WIDTH * DEGREE_2_RAD;
-    vt_r = -chassis_vx + chassis_cmd_recv.wz * HALF_TRACK_WIDTH * DEGREE_2_RAD;
+    if (chassis_cmd_recv.metric_mode)
+    {
+        vt_l = (-chassis_vx + chassis_cmd_recv.wz * HALF_TRACK_WIDTH) * MOTOR_DEGREE_PER_MM;
+        vt_r = (-chassis_vx - chassis_cmd_recv.wz * HALF_TRACK_WIDTH) * MOTOR_DEGREE_PER_MM;
+    }
+    else
+    {
+        vt_l = -chassis_vx - chassis_cmd_recv.wz * HALF_TRACK_WIDTH * DEGREE_2_RAD;
+        vt_r = -chassis_vx + chassis_cmd_recv.wz * HALF_TRACK_WIDTH * DEGREE_2_RAD;
+    }
 }
 #endif
 /**
@@ -195,9 +216,50 @@ static void ChassisOutput()
  */
 static void EstimateSpeed()
 {
-    // 根据电机速度和陀螺仪的角速度进行解算,还可以利用加速度计判断是否打滑(如果有)
-    // chassis_feedback_data.vx vy wz =
-    //  ...
+#ifdef CHASSIS_DRIVE_DIFFERENTIAL
+    const float wheel_circumference_mm = PERIMETER_WHEEL;
+    const float motor_angle_to_wheel_mm = wheel_circumference_mm / (360.0f * REDUCTION_RATIO_WHEEL);
+
+    if (!odometry_ecd_initialized)
+    {
+        last_left_ecd = motor_l->measure.ecd;
+        last_right_ecd = motor_r->measure.ecd;
+        odometry_ecd_initialized = 1;
+        return;
+    }
+
+    int32_t left_delta_ecd = (int32_t)motor_l->measure.ecd - (int32_t)last_left_ecd;
+    int32_t right_delta_ecd = (int32_t)motor_r->measure.ecd - (int32_t)last_right_ecd;
+    last_left_ecd = motor_l->measure.ecd;
+    last_right_ecd = motor_r->measure.ecd;
+
+    if (left_delta_ecd > 4096)
+        left_delta_ecd -= 8192;
+    else if (left_delta_ecd < -4096)
+        left_delta_ecd += 8192;
+    if (right_delta_ecd > 4096)
+        right_delta_ecd -= 8192;
+    else if (right_delta_ecd < -4096)
+        right_delta_ecd += 8192;
+
+    // 电机反转配置使左右轮前进时编码器方向相反,统一转换为前进为正。
+    const float left_distance_mm = (float)left_delta_ecd * motor_angle_to_wheel_mm;
+    const float right_distance_mm = -(float)right_delta_ecd * motor_angle_to_wheel_mm;
+    const float delta_yaw_rad = (right_distance_mm - left_distance_mm) / TRACK_WIDTH;
+    const float distance_mm = (left_distance_mm + right_distance_mm) * 0.5f;
+    const float midpoint_yaw_rad = chassis_feedback_data.yaw_rad + delta_yaw_rad * 0.5f;
+
+    chassis_feedback_data.left_wheel_distance_mm += left_distance_mm;
+    chassis_feedback_data.right_wheel_distance_mm += right_distance_mm;
+    chassis_feedback_data.x_mm += distance_mm * arm_cos_f32(midpoint_yaw_rad);
+    chassis_feedback_data.y_mm -= distance_mm * arm_sin_f32(midpoint_yaw_rad);
+    chassis_feedback_data.yaw_rad += delta_yaw_rad;
+
+    const float left_speed_mm_s = motor_l->measure.speed_aps * motor_angle_to_wheel_mm;
+    const float right_speed_mm_s = -motor_r->measure.speed_aps * motor_angle_to_wheel_mm;
+    chassis_feedback_data.vx_mm_s = (left_speed_mm_s + right_speed_mm_s) * 0.5f;
+    chassis_feedback_data.wz_rad_s = (right_speed_mm_s - left_speed_mm_s) / TRACK_WIDTH;
+#endif
 }
 
 /* 机器人底盘控制核心任务 */
@@ -276,4 +338,21 @@ void ChassisTask()
     // 推送反馈消息
 
     PubPushMessage(chassis_pub, (void *)&chassis_feedback_data);
+
+#ifdef CHASSIS_DRIVE_DIFFERENTIAL
+    static uint32_t last_upload_tick;
+    static Rescue_Wheel_Upload_s wheel_upload;
+    uint32_t upload_tick = HAL_GetTick();
+    if ((uint32_t)(upload_tick - last_upload_tick) >= 50U)
+    {
+        const float motor_degree_to_wheel_mm = PERIMETER_WHEEL / (360.0f * REDUCTION_RATIO_WHEEL);
+        wheel_upload.timestamp_ms = upload_tick;
+        wheel_upload.left_distance_mm = chassis_feedback_data.left_wheel_distance_mm;
+        wheel_upload.right_distance_mm = chassis_feedback_data.right_wheel_distance_mm;
+        wheel_upload.left_speed_mm_s = motor_l->measure.speed_aps * motor_degree_to_wheel_mm;
+        wheel_upload.right_speed_mm_s = -motor_r->measure.speed_aps * motor_degree_to_wheel_mm;
+        if (RescueSendFrame(RESCUE_CMD_UP_WHEEL, 0U, &wheel_upload, sizeof(wheel_upload)))
+            last_upload_tick = upload_tick;
+    }
+#endif
 }
