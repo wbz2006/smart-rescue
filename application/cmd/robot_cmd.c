@@ -73,7 +73,7 @@ static void RemoteControlSet()
     }
 
     // 当前底盘为差速结构: 右摇杆竖直控制前进,水平控制旋转.
-    chassis_cmd_send.vx = 20.0f * (float)rc_data[TEMP].rc.rocker_r1;
+    chassis_cmd_send.vx = 40.0f * (float)rc_data[TEMP].rc.rocker_r1;
     chassis_cmd_send.vy = 0.0f;
     chassis_cmd_send.wz = 10.0f * (float)rc_data[TEMP].rc.rocker_r_;
     chassis_cmd_send.chassis_mode = CAHSSIS_MOVE;
@@ -81,7 +81,7 @@ static void RemoteControlSet()
     // 右侧开关向上控制夹爪闭合.
     if (switch_is_up(rc_data[TEMP].rc.switch_right))
         gimbal_cmd_send.claw_mode = CLAW_LOCK;
-    else
+    else if (switch_is_mid(rc_data[TEMP].rc.switch_right))
         gimbal_cmd_send.claw_mode = CLAW_RELEASE;
 
 }
