@@ -62,8 +62,9 @@ void USARTServiceInit(USARTInstance *_instance);
  * @param _instance 串口实例
  * @param send_buf 待发送数据的buffer
  * @param send_size how many bytes to send
+ * @return HAL状态，DMA/中断模式表示传输是否成功启动
  */
-void USARTSend(USARTInstance *_instance, uint8_t *send_buf, uint16_t send_size,USART_TRANSFER_MODE mode);
+HAL_StatusTypeDef USARTSend(USARTInstance *_instance, uint8_t *send_buf, uint16_t send_size,USART_TRANSFER_MODE mode);
 
 /**
  * @brief 判断串口是否准备好,用于连续或异步的IT/DMA发送

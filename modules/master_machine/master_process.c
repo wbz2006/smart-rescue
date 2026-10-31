@@ -63,23 +63,24 @@ static void VisionOfflineCallback(void *id)
 static uint8_t rescue_rx_accum[RESCUE_RX_ACCUM_SIZE];
 static uint16_t rescue_rx_accum_len;
 
-static void DecodeRescueControl(const Rescue_Frame_s *frame)
+static uint8_t DecodeRescueControl(const Rescue_Frame_s *frame)
 {
     Rescue_Control_s candidate;
 
     if (frame->cmd_id != RESCUE_CMD_DOWN_CONTROL ||
         frame->payload_len != sizeof(candidate))
-        return;
+        return 0U;
 
     memcpy(&candidate, frame->payload, sizeof(candidate));
     if (!isfinite(candidate.vx_mm_s) || !isfinite(candidate.vy_mm_s) ||
         !isfinite(candidate.wz_rad_s) || candidate.chassis_mode > CAHSSIS_MOVE ||
         candidate.claw_mode > CLAW_RELEASE || candidate.camera_pos > CAMERA_LOAD)
-        return;
+        return 0U;
 
     rescue_control = candidate;
     rescue_control_tick = HAL_GetTick();
     rescue_control_received = 1U;
+    return 1U;
 }
 
 static void DecodeRescueBuffer(void)
@@ -113,8 +114,8 @@ static void DecodeRescueBuffer(void)
         Rescue_Frame_s frame;
         if (RescueProtocolUnpack(rescue_rx_accum + offset, frame_len, &frame))
         {
-            DecodeRescueControl(&frame);
-            DaemonReload(vision_daemon_instance);
+            if (DecodeRescueControl(&frame))
+                DaemonReload(vision_daemon_instance);
             offset = (uint16_t)(offset + frame_len);
             continue;
         }
@@ -211,7 +212,11 @@ uint8_t RescueSendFrame(uint16_t cmd_id, uint8_t flags, const void *payload, uin
         return 0U;
     }
 
-    USARTSend(vision_usart_instance, send_buff, tx_len, USART_TRANSFER_DMA);
+    if (USARTSend(vision_usart_instance, send_buff, tx_len, USART_TRANSFER_DMA) != HAL_OK)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     ++rescue_tx_seq;
     __set_PRIMASK(primask);
     return 1U;
@@ -247,7 +252,7 @@ uint8_t RescueControlIsOnline(void)
 
     __disable_irq();
     online = (uint8_t)(rescue_control_received &&
-                       (uint32_t)(HAL_GetTick() - rescue_control_tick) < 200U);
+                       (uint32_t)(HAL_GetTick() - rescue_control_tick) <= 200U);
     __set_PRIMASK(primask);
     return online;
 }

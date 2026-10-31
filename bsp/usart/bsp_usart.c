@@ -59,23 +59,19 @@ USARTInstance *USARTRegister(USART_Init_Config_s *init_config)
 }
 
 /* @todo 当前仅进行了形式上的封装,后续要进一步考虑是否将module的行为与bsp完全分离 */
-void USARTSend(USARTInstance *_instance, uint8_t *send_buf, uint16_t send_size, USART_TRANSFER_MODE mode)
+HAL_StatusTypeDef USARTSend(USARTInstance *_instance, uint8_t *send_buf, uint16_t send_size, USART_TRANSFER_MODE mode)
 {
     switch (mode)
     {
     case USART_TRANSFER_BLOCKING:
-        HAL_UART_Transmit(_instance->usart_handle, send_buf, send_size, 100);
-        break;
+        return HAL_UART_Transmit(_instance->usart_handle, send_buf, send_size, 100);
     case USART_TRANSFER_IT:
-        HAL_UART_Transmit_IT(_instance->usart_handle, send_buf, send_size);
-        break;
+        return HAL_UART_Transmit_IT(_instance->usart_handle, send_buf, send_size);
     case USART_TRANSFER_DMA:
-        HAL_UART_Transmit_DMA(_instance->usart_handle, send_buf, send_size);
-        break;
+        return HAL_UART_Transmit_DMA(_instance->usart_handle, send_buf, send_size);
     default:
         while (1)
             ; // illegal mode! check your code context! 检查定义instance的代码上下文,可能出现指针越界
-        break;
     }
 }
 
