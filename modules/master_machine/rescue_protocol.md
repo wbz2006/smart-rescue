@@ -5,7 +5,7 @@
 ## 串口参数
 
 - USART10，PE2 为 RX、PE3 为 TX
-- 921600 baud，8 data bits，no parity，1 stop bit，无硬件流控
+- 115200 baud，8 data bits，no parity，1 stop bit，无硬件流控
 - 帧内多字节整数和浮点数均为 little-endian；浮点数为 IEEE-754 binary32
 
 ## 帧格式
@@ -32,7 +32,7 @@
 | 下位机 → 上位机 | `0x0101` | 完整遥测 | 100 Hz | `Rescue_Telemetry_s`，共 80 bytes |
 | 上位机 → 下位机 | `0x0201` | 完整控制 | 100 Hz | `Rescue_Control_s`，共 15 bytes |
 
-`Rescue_Telemetry_s` 字段顺序为：`timestamp_ms:uint32`；`accel[3]:float` (m/s²)、`gyro[3]:float` (rad/s)、`roll/pitch/yaw:float` (degree)；`left_wheel_distance_mm`、`right_wheel_distance_mm` (mm)、`left_wheel_speed_mm_s`、`right_wheel_speed_mm_s` (mm/s)；`x_mm`、`y_mm` (mm)、`yaw_rad` (rad)、`vx_mm_s` (mm/s)、`wz_rad_s` (rad/s)；`robot_state`、`chassis_mode`、`online_flags`、`reserved:uint8`。该帧完整长度为 90 bytes，100 Hz 时上行约 9000 bytes/s，占 921600 baud、8N1 上行容量约 9.8%。
+`Rescue_Telemetry_s` 字段顺序为：`timestamp_ms:uint32`；`accel[3]:float` (m/s²)、`gyro[3]:float` (rad/s)、`roll/pitch/yaw:float` (degree)；`left_wheel_distance_mm`、`right_wheel_distance_mm` (mm)、`left_wheel_speed_mm_s`、`right_wheel_speed_mm_s` (mm/s)；`x_mm`、`y_mm` (mm)、`yaw_rad` (rad)、`vx_mm_s` (mm/s)、`wz_rad_s` (rad/s)；`robot_state`、`chassis_mode`、`online_flags`、`reserved:uint8`。该帧完整长度为 90 bytes，100 Hz 时上行约 9000 bytes/s，占 115200 baud、8N1 上行容量约 78%。
 
 `Rescue_Control_s` 字段顺序为：`vx_mm_s:float`、`vy_mm_s:float`、`wz_rad_s:float`、`chassis_mode:uint8`、`claw_mode:uint8`、`camera_pos:uint8`。该帧完整长度为 25 bytes。串口为全双工，上下行分别计算带宽。
 
