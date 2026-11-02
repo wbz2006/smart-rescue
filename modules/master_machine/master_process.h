@@ -103,7 +103,7 @@ typedef struct
     uint8_t robot_state;
     uint8_t chassis_mode;
     uint8_t online_flags;
-    uint8_t reserved;
+    uint8_t claw_mode;
 } Rescue_Telemetry_s;
 
 typedef struct

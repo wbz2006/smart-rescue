@@ -210,7 +210,7 @@ void RobotCMDTask()
         if (RemoteControlIsOnline())
             telemetry.online_flags |= 0x02U;
 #endif
-        telemetry.reserved = 0U;
+        telemetry.claw_mode = (uint8_t)gimbal_cmd_send.claw_mode;
         if (RescueSendFrame(RESCUE_CMD_UP_TELEMETRY, 0U, &telemetry, sizeof(telemetry)))
             last_telemetry_tick = now;
     }

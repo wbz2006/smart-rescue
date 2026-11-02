@@ -32,7 +32,7 @@
 | 下位机 → 上位机 | `0x0101` | 完整遥测 | 100 Hz | `Rescue_Telemetry_s`，共 80 bytes |
 | 上位机 → 下位机 | `0x0201` | 完整控制 | 100 Hz | `Rescue_Control_s`，共 15 bytes |
 
-`Rescue_Telemetry_s` 字段顺序为：`timestamp_ms:uint32`；`accel[3]:float` (m/s²)、`gyro[3]:float` (rad/s)、`roll/pitch/yaw:float` (degree)；`left_wheel_distance_mm`、`right_wheel_distance_mm` (mm)、`left_wheel_speed_mm_s`、`right_wheel_speed_mm_s` (mm/s)；`x_mm`、`y_mm` (mm)、`yaw_rad` (rad)、`vx_mm_s` (mm/s)、`wz_rad_s` (rad/s)；`robot_state`、`chassis_mode`、`online_flags`、`reserved:uint8`。该帧完整长度为 90 bytes，100 Hz 时上行约 9000 bytes/s，占 115200 baud、8N1 上行容量约 78%。
+`Rescue_Telemetry_s` 字段顺序为：`timestamp_ms:uint32`；`accel[3]:float` (m/s²)、`gyro[3]:float` (rad/s)、`roll/pitch/yaw:float` (degree)；`left_wheel_distance_mm`、`right_wheel_distance_mm` (mm)、`left_wheel_speed_mm_s`、`right_wheel_speed_mm_s` (mm/s)；`x_mm`、`y_mm` (mm)、`yaw_rad` (rad)、`vx_mm_s` (mm/s)、`wz_rad_s` (rad/s)；`robot_state`、`chassis_mode`、`online_flags`、`claw_mode:uint8`。该帧完整长度为 90 bytes，100 Hz 时上行约 9000 bytes/s，占 115200 baud、8N1 上行容量约 78%。
 
 `Rescue_Control_s` 字段顺序为：`vx_mm_s:float`、`vy_mm_s:float`、`wz_rad_s:float`、`chassis_mode:uint8`、`claw_mode:uint8`、`camera_pos:uint8`。该帧完整长度为 25 bytes。串口为全双工，上下行分别计算带宽。
 
@@ -44,6 +44,8 @@ IMU 三轴顺序与项目 `attitude_t` 中的 XYZ 顺序相同；加速度和角
 
 `online_flags`：bit 0 表示近 200 ms 内收到有效上位机控制帧；bit 1 表示遥控器在线（仅在编译启用遥控器模式时使用）。
 
+遥测末字节 `claw_mode` 回传固件当前持有的套筒模式：`0=CLAW_ZERO_POS`、`1=CLAW_LOCK`、`2=CLAW_RELEASE`。它来自控制状态，不是位置传感器反馈；该值表示当前目标模式，不能据此确认套筒机构已物理到位。
+
 ## 控制源与超时
 
 `application/robot_def.h` 默认启用 `AUTO_CONTROL`。上位机每 10 ms 发送完整控制帧，下位机收到有效帧后更新统一的 `Rescue_Control_s`；控制任务读取最新值。控制帧超过 200 ms 未更新时，下位机将底盘切换到 `CHASSIS_ZERO_FORCE`。需要用遥控器调试时，关闭 `AUTO_CONTROL` 并启用 `REMOTE_CONTROL`。
@@ -54,7 +56,7 @@ IMU 三轴顺序与项目 `attitude_t` 中的 XYZ 顺序相同；加速度和角
 - `vx_mm_s` 与 `wz_rad_s` 可同时非零，差速底盘据此执行弧线运动；下位机不做速度/旋转互斥或优先级改写。
 - 控制帧是每 10 ms 发送一次的完整状态快照。串口打开或重连后先发零速度和 `CHASSIS_ZERO_FORCE`；任务条件满足后再发送运行速度。
 - `claw_mode` 和 `camera_pos` 是持续目标模式；重复帧保持目标，不代表每帧重启一次舵机动作。固件当前只在模式变化时更新舵机目标角度。
-- 当前协议只定义 `0x0201` 控制帧与 `0x0101` 遥测帧，没有握手、单独 ACK 或安全区到达命令。`robot_state` 沿用固件现有机器人工作状态，不表示套框舵机到位；`reserved` 不分配业务含义。
+- 当前协议只定义 `0x0201` 控制帧与 `0x0101` 遥测帧，没有握手、单独 ACK 或安全区到达命令。`robot_state` 沿用固件现有机器人工作状态；遥测 `claw_mode` 只表示当前套筒目标模式，不表示舵机或套筒物理到位。
 - 物理落框/抬框与 `claw_mode` 枚举的对应关系、舵机稳定时间及 `camera_pos` 的物理含义，需按机构实测确认；在这些定义补齐前，不将模式值或现有状态解释成动作完成反馈。
 
 上位机任务层负责视觉过期停车与安全区判定。它应持续接收并校验遥测；有效遥测和 `online_flags.bit0` 只反映链路/控制帧在线，不是动作完成确认。
