@@ -45,6 +45,16 @@
 #define RADIUS_WHEEL 33.5f          // 轮子半径,对应直径67mm
 #define REDUCTION_RATIO_WHEEL 19.0f // 电机减速比,因为编码器量测的是转子的速度而不是输出轴的速度故需进行转换
 
+// 标定参数仅用于反馈;减速比需要按实际传动结构确认。
+#define ODOM_LEFT_DISTANCE_SCALE 1.0f
+#define ODOM_RIGHT_DISTANCE_SCALE 1.0f
+#define ODOM_TRACK_WIDTH_MM TRACK_WIDTH
+#define ODOM_IMU_WEIGHT 0.95f
+#define ODOM_IMU_YAW_SIGN 1.0f
+#define ODOM_SLIP_THRESHOLD_RAD_S 0.35f
+#define ODOM_STATIONARY_SPEED_MM_S 5.0f
+#define ODOM_FEEDBACK_TIMEOUT_MS 20U
+
 #pragma pack(1) // 压缩结构体,取消字节对齐,下面的数据都可能被传输
 /* -------------------------基本控制模式和数据类型定义-------------------------*/
 /**
@@ -131,10 +141,12 @@ typedef struct
     float left_wheel_speed_mm_s;   // 左轮速度,前进为正
     float right_wheel_speed_mm_s;  // 右轮速度,前进为正
     float x_mm;                    // 底盘里程计位置,初始朝向为X正方向
-    float y_mm;                    // 底盘里程计位置,Y正方向为底盘右侧
+    float y_mm;                    // 底盘里程计位置,Y正方向为初始底盘左侧
     float yaw_rad;                 // 底盘累计航向角,逆时针为正
     float vx_mm_s;                 // 底盘前向速度
     float wz_rad_s;                // 底盘角速度,逆时针为正
+    uint32_t timestamp_ms;         // 轮反馈快照时间,沿用上行协议的时间戳字段
+    INS_Feedback_s imu;            // 与轮反馈一起采集,仅用于板内消息
 } Chassis_Upload_Data_s;
 
 

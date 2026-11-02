@@ -40,6 +40,9 @@ typedef struct
 
     float total_angle;   // 总角度,注意方向
     int32_t total_round; // 总圈数,注意方向
+    uint32_t total_ecd; // CAN接收时累计的编码器计数,按uint32_t回绕
+    uint32_t timestamp_ms;
+    uint8_t initialized;
 } DJI_Motor_Measure_s;
 
 /**

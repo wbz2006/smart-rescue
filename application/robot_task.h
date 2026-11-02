@@ -54,6 +54,7 @@ __attribute__((noreturn)) void StartINSTASK(void const *argument)
     static float ins_dt;
     INS_Init(); // 确保BMI088被正确初始化.
     LOGINFO("[freeRTOS] INS Task Start");
+    TickType_t last_wake = xTaskGetTickCount();
     for (;;)
     {
         // 1kHz
@@ -62,7 +63,7 @@ __attribute__((noreturn)) void StartINSTASK(void const *argument)
         ins_dt = DWT_GetTimeline_ms() - ins_start;
         if (ins_dt > 1)
             LOGERROR("[freeRTOS] INS Task is being DELAY! dt = [%f]", &ins_dt);
-        osDelay(1);
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(1));
     }
 }
 
@@ -106,6 +107,7 @@ __attribute__((noreturn)) void StartROBOTTASK(void const *argument)
     static float robot_dt;
     static float robot_start;
     LOGINFO("[freeRTOS] ROBOT core Task Start");
+    TickType_t last_wake = xTaskGetTickCount();
     // 200Hz-500Hz,若有额外的控制任务如平衡步兵可能需要提升至1kHz
     for (;;)
     {
@@ -114,7 +116,7 @@ __attribute__((noreturn)) void StartROBOTTASK(void const *argument)
         robot_dt = DWT_GetTimeline_ms() - robot_start;
         if (robot_dt > 5)
             LOGERROR("[freeRTOS] ROBOT core Task is being DELAY! dt = [%f]", &robot_dt);
-        osDelay(5);
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(5));
     }
 }
 

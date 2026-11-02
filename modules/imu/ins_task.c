@@ -20,8 +20,13 @@
 #include "general_def.h"
 #include "master_process.h"
 #include "arm_math.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 static INS_t INS;
+static INS_Feedback_s feedback;
+static uint8_t chassis_stationary;
+static uint32_t chassis_feedback_tick;
 static IMU_Param_t IMU_Param;
 static PIDInstance TempCtrl = {0};
 
@@ -35,6 +40,7 @@ static float dt = 0, t = 0;
 static float RefTemp = 40; // 恒温设定温度
 
 static void IMU_Param_Correction(IMU_Param_t *param, float gyro[3], float accel[3]);
+static uint8_t UpdateStationaryBias(float sample_dt, uint32_t now);
 
 static void IMUPWMSet(uint16_t pwm)
 {
@@ -55,8 +61,6 @@ static void IMU_Temperature_Ctrl(void)
 static void InitQuaternion(float *init_q4)
 {
     float acc_init[3] = {0};
-    float gravity_norm[3] = {0, 0, 1}; // 导航系重力加速度矢量,归一化后为(0,0,1)
-    float axis_rot[3] = {0};           // 旋转轴
     // 读取100次加速度计数据,取平均值作为初始值
     for (uint8_t i = 0; i < 100; ++i)
     {
@@ -69,13 +73,19 @@ static void InitQuaternion(float *init_q4)
     for (uint8_t i = 0; i < 3; ++i)
         acc_init[i] /= 100;
     Norm3d(acc_init);
-    // 计算原始加速度矢量和导航系重力加速度矢量的夹角
-    float angle = acosf(Dot3d(acc_init, gravity_norm));
-    Cross3d(acc_init, gravity_norm, axis_rot);
-    Norm3d(axis_rot);
-    init_q4[0] = cosf(angle / 2.0f);
-    for (uint8_t i = 0; i < 2; ++i)
-        init_q4[i + 1] = axis_rot[i] * sinf(angle / 2.0f); // 轴角公式,第三轴为0(没有z轴分量)
+    // 水平放置时叉积为零,直接构造最短旋转四元数,避免归一化零向量。
+    if (acc_init[Z] < -0.999999f)
+    {
+        init_q4[0] = 0;
+        init_q4[1] = 1;
+        init_q4[2] = init_q4[3] = 0;
+        return;
+    }
+    const float norm = sqrtf(2.0f * (1.0f + acc_init[Z]));
+    init_q4[0] = (1.0f + acc_init[Z]) / norm;
+    init_q4[1] = acc_init[Y] / norm;
+    init_q4[2] = -acc_init[X] / norm;
+    init_q4[3] = 0;
 }
 
 attitude_t *INS_Init(void)
@@ -83,7 +93,7 @@ attitude_t *INS_Init(void)
     if (!INS.init)
         INS.init = 1;
     else
-        return (attitude_t *)&INS.Gyro;
+        return &feedback.attitude;
 
     // HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 
@@ -113,12 +123,59 @@ attitude_t *INS_Init(void)
     // noise of accel is relatively big and of high freq,thus lpf is used
     INS.AccelLPF = 0.0085;
     DWT_GetDeltaT(&INS_DWT_Count);
-    return (attitude_t *)&INS.Gyro; // @todo: 这里偷懒了,不要这样做! 修改INT_t结构体可能会导致异常,待修复.
+    return &feedback.attitude;
 }
 
 attitude_t *INS_GetData(void)
 {
-    return (attitude_t *)&INS.Gyro;
+    return &feedback.attitude;
+}
+
+void INS_GetFeedback(INS_Feedback_s *snapshot)
+{
+    taskENTER_CRITICAL();
+    *snapshot = feedback;
+    taskEXIT_CRITICAL();
+}
+
+void INS_SetChassisStationary(uint8_t stationary)
+{
+    taskENTER_CRITICAL();
+    chassis_stationary = stationary;
+    chassis_feedback_tick = HAL_GetTick();
+    taskEXIT_CRITICAL();
+}
+
+static uint8_t UpdateStationaryBias(float sample_dt, uint32_t now)
+{
+    static float stationary_time;
+    static float last_gyro[3], last_accel[3];
+    const float accel_norm = NormOf3d(BMI088.Accel);
+    uint8_t quiet = chassis_stationary &&
+                    (uint32_t)(now - chassis_feedback_tick) < 20U &&
+                    fabsf(accel_norm - 9.81f) < 0.15f;
+    for (uint8_t i = 0; i < 3; ++i)
+    {
+        quiet = quiet && fabsf(BMI088.Gyro[i]) < 0.03f &&
+                fabsf(BMI088.Gyro[i] - last_gyro[i]) < 0.01f &&
+                fabsf(BMI088.Accel[i] - last_accel[i]) < 0.3f;
+        last_gyro[i] = BMI088.Gyro[i];
+        last_accel[i] = BMI088.Accel[i];
+    }
+    if (!quiet)
+    {
+        stationary_time = 0;
+        return 0;
+    }
+    stationary_time += sample_dt;
+    if (stationary_time < 2.0f)
+        return 0;
+
+    // 只更新重力观测无法估计的Z轴零偏;XY轴仍由原四元数EKF估计。
+    const float correction = BMI088.Gyro[Z] * sample_dt / (5.0f + sample_dt);
+    BMI088.GyroOffset[Z] += correction;
+    BMI088.Gyro[Z] -= correction;
+    return 1;
 }
 
 /* 注意以1kHz的频率运行此任务 */
@@ -134,6 +191,8 @@ void INS_Task(void)
     if ((count % 1) == 0)
     {
         BMI088_Read(&BMI088);
+        const uint32_t sample_tick = HAL_GetTick();
+        const uint8_t stationary = UpdateStationaryBias(dt, sample_tick);
 
         INS.Accel[X] = BMI088.Accel[X];
         INS.Accel[Y] = BMI088.Accel[Y];
@@ -172,6 +231,18 @@ void INS_Task(void)
         INS.Pitch = QEKF_INS.Pitch;
         INS.Roll = QEKF_INS.Roll;
         INS.YawTotalAngle = QEKF_INS.YawTotalAngle;
+
+        taskENTER_CRITICAL();
+        memcpy(feedback.attitude.Gyro, INS.Gyro, sizeof(INS.Gyro));
+        memcpy(feedback.attitude.Accel, INS.Accel, sizeof(INS.Accel));
+        feedback.attitude.Roll = INS.Roll;
+        feedback.attitude.Pitch = INS.Pitch;
+        feedback.attitude.Yaw = INS.Yaw;
+        feedback.attitude.YawTotalAngle = INS.YawTotalAngle;
+        feedback.timestamp_ms = sample_tick;
+        feedback.stationary = stationary;
+        feedback.ready = 1;
+        taskEXIT_CRITICAL();
 
         VisionSetAltitude(INS.Yaw, INS.Pitch, INS.Roll);
     }

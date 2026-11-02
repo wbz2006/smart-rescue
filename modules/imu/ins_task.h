@@ -38,6 +38,14 @@ typedef struct
 
 typedef struct
 {
+    attitude_t attitude;
+    uint32_t timestamp_ms;
+    uint8_t ready;
+    uint8_t stationary;
+} INS_Feedback_s;
+
+typedef struct
+{
     float q[4]; // 四元数估计值
 
     float MotionAccel_b[3]; // 机体坐标加速度
@@ -84,6 +92,8 @@ typedef struct
  */
 attitude_t *INS_Init(void);
 attitude_t *INS_GetData(void);
+void INS_GetFeedback(INS_Feedback_s *feedback);
+void INS_SetChassisStationary(uint8_t stationary);
 
 /**
  * @brief 此函数放入实时系统中,以1kHz频率运行

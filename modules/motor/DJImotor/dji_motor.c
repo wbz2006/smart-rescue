@@ -167,6 +167,17 @@ static void DecodeDJIMotor(CANInstance *_instance)
     // 解析数据并对电流和速度进行滤波,电机的反馈报文具体格式见电机说明手册
     measure->last_ecd = measure->ecd;
     measure->ecd = ((uint16_t)rxbuff[0]) << 8 | rxbuff[1];
+    if (measure->initialized)
+    {
+        int32_t delta = (int32_t)measure->ecd - measure->last_ecd;
+        if (delta > 4096)
+            delta -= 8192;
+        else if (delta < -4096)
+            delta += 8192;
+        measure->total_ecd += (uint32_t)delta;
+    }
+    measure->initialized = 1;
+    measure->timestamp_ms = HAL_GetTick();
     measure->angle_single_round = ECD_ANGLE_COEF_DJI * (float)measure->ecd;
     measure->speed_aps = (1.0f - SPEED_SMOOTH_COEF) * measure->speed_aps +
                          RPM_2_ANGLE_PER_SEC * SPEED_SMOOTH_COEF * (float)((int16_t)(rxbuff[2] << 8 | rxbuff[3]));

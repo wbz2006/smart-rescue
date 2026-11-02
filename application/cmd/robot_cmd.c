@@ -27,7 +27,6 @@ static Chassis_Ctrl_Cmd_s chassis_cmd_send;      // 发送给底盘应用的信�
 static Chassis_Upload_Data_s chassis_fetch_data; // 从底盘应用接收的反馈信息信息,底盘功率枪口热量与底盘运动状态等
 
 static RC_ctrl_t *rc_data;              // 遥控器数据,初始化时返回
-static attitude_t *imu_data;
 // 控制结构体
 // 反馈结构体
 
@@ -43,7 +42,6 @@ Rescue_Control_s host_control;
 
 void RobotCMDInit()
 {
-    imu_data = INS_GetData();
 #ifdef REMOTE_CONTROL
     rc_data = RemoteControlInit(&huart5);   // 修改为对应串口,注意如果是自研板dbus协议串口需选用添加了反相器的那个
 #endif
@@ -190,7 +188,8 @@ void RobotCMDTask()
     uint32_t now = HAL_GetTick();
     if ((uint32_t)(now - last_telemetry_tick) >= RESCUE_PERIOD_MS)
     {
-        telemetry.timestamp_ms = now;
+        const attitude_t *imu_data = &chassis_fetch_data.imu.attitude;
+        telemetry.timestamp_ms = chassis_fetch_data.timestamp_ms;
         memcpy(telemetry.accel, imu_data->Accel, sizeof(telemetry.accel));
         memcpy(telemetry.gyro, imu_data->Gyro, sizeof(telemetry.gyro));
         telemetry.roll = imu_data->Roll;

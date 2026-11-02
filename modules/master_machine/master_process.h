@@ -85,6 +85,8 @@ typedef struct
 
 typedef struct
 {
+    // X向前/Y向左/Z向上;姿态角为度,gyro为rad/s,里程航向为rad。
+    // 时间戳为底盘采集快照的时间,IMU为该时刻最近一次完整采样。
     uint32_t timestamp_ms;
     float accel[3];
     float gyro[3];
