@@ -26,10 +26,10 @@ static void ClawSetMode(claw_mode_e mode)
     switch (mode)
     {
     case CLAW_LOCK:
-        ServoSetAngle(claw, 180.0f);
+        ServoSetAngle(claw, 80.0f);
         break;
     case CLAW_RELEASE:
-        ServoSetAngle(claw, 150.0f);
+        ServoSetAngle(claw, 180.0f);
         break;
     default:
         ServoSetAngle(claw, 180.0f);
