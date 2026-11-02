@@ -38,6 +38,9 @@ static Gimbal_Upload_Data_s gimbal_fetch_data; // 从云台获取的反馈信息
 
 static Robot_Status_e robot_state; // 机器人整体工作状态
 
+
+Rescue_Control_s host_control;
+
 void RobotCMDInit()
 {
     imu_data = INS_GetData();
@@ -83,9 +86,9 @@ static void RemoteControlSet()
 
     // 右侧开关向上控制夹爪闭合.
     if (switch_is_up(rc_data[TEMP].rc.switch_right))
-        gimbal_cmd_send.claw_mode = CLAW_LOCK;
-    else if (switch_is_mid(rc_data[TEMP].rc.switch_right))
         gimbal_cmd_send.claw_mode = CLAW_RELEASE;
+    else if (switch_is_mid(rc_data[TEMP].rc.switch_right))
+        gimbal_cmd_send.claw_mode = CLAW_LOCK;
 
 }
 #endif
@@ -120,7 +123,6 @@ static void WheelPIDTestSet()
 #ifdef AUTO_CONTROL
 static void AutoControlSet()
 {
-    Rescue_Control_s host_control;
 
     if (!RescueControlIsOnline() || !RescueGetControl(&host_control))
     {
